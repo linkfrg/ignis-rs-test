@@ -1,0 +1,7 @@
+#ifndef __IGNIS_NOTIFICATIONS_GLIB_H__
+#define __IGNIS_NOTIFICATIONS_GLIB_H__
+
+#include "service.h"
+#include "error.h"
+
+#endif

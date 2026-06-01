@@ -1,7 +1,7 @@
 [workspace]
 members = [
-    "crates/notification_service",
-    "crates/app", "crates/notification_service_gobject",
+    "crates/notifications",
+    "crates/notifications_glib",
 ]
 
 resolver = "3"

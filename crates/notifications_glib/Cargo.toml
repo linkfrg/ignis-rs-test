@@ -1,0 +1,15 @@
+[package]
+name = "notifications_glib"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+glib = { git = "https://github.com/gtk-rs/gtk-rs-core" }
+gio = { git = "https://github.com/gtk-rs/gtk-rs-core" }
+notifications = {path = "../notifications"}
+tokio = { version = "1.49.0", features = ["sync"] }
+
+[lib]
+name = "ignis_notifications_glib"
+crate-type = ["cdylib"]
+
