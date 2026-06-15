@@ -41,8 +41,8 @@ impl ServiceData {
         self.save_to_file();
     }
 
-    pub fn remove_notification(&mut self, id: &u32) {
-        self.notifications.remove(id);
+    pub fn remove_notification(&mut self, id: u32) {
+        self.notifications.remove(&id);
         self.save_to_file();
     }
 

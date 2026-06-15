@@ -2,7 +2,6 @@ use crate::NotificationServiceSignal;
 use crate::constants::IMAGE_DIR;
 use crate::data::ServiceData;
 use crate::notification::Notification;
-use crate::signals::SignalHelper;
 use gdk_pixbuf::{Colorspace, Pixbuf};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -58,7 +57,9 @@ impl DBusService {
 
         data.add_notification(id, new_notification, replace);
 
-        SignalHelper::send_notified(&self.tx, id, replace).await;
+        let _ = self.tx
+            .send(NotificationServiceSignal::Notified { id, replace })
+            .await;
 
         return id;
     }
@@ -76,11 +77,11 @@ impl DBusService {
         id: u32,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) -> fdo::Result<()> {
-        emitter.notification_closed(&id, &3).await?;
+        emitter.notification_closed(id, 3).await?;
         let mut data = self.data.lock().await;
-        data.remove_notification(&id);
+        data.remove_notification(id);
 
-        SignalHelper::send_closed(&self.tx, &id).await;
+        let _ = self.tx.send(NotificationServiceSignal::Closed { id }).await;
 
         Ok(())
     }
@@ -93,14 +94,14 @@ impl DBusService {
     #[zbus(signal)]
     async fn notification_closed(
         emitter: &SignalEmitter<'_>,
-        id: &u32,
-        reason: &u32,
+        id: u32,
+        reason: u32,
     ) -> zbus::Result<()>;
 
     #[zbus(signal)]
     async fn action_invoked(
         emitter: &SignalEmitter<'_>,
-        id: &u32,
+        id: u32,
         action_key: &str,
     ) -> zbus::Result<()>;
 }

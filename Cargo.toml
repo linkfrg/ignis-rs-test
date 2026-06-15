@@ -10,4 +10,4 @@ resolver = "3"
 glib = "0.22.7"
 gio = "0.22.6"
 gdk-pixbuf = "0.22.0"
-tokio = { version = "1.52.3", features = ["macros", "rt", "rt-multi-thread", "sync"] }
+tokio = { version = "1.52.3", features = ["macros", "rt", "rt-multi-thread", "sync", "process"] }
