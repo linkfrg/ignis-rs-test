@@ -44,7 +44,8 @@ pub(crate) mod ffi {
         <super::IgnisNotificationsGLibServiceImp as super::ObjectSubclass>::Instance;
 
     #[unsafe(no_mangle)]
-    pub unsafe extern "C" fn ignis_notifications_glib_service_new() -> *mut IgnisNotificationsGLibService {
+    pub unsafe extern "C" fn ignis_notifications_glib_service_new()
+    -> *mut IgnisNotificationsGLibService {
         glib::Object::builder::<super::super::IgnisNotificationsGLibServiceWrapped>()
             .build()
             .to_glib_full()
@@ -52,7 +53,8 @@ pub(crate) mod ffi {
 
     #[unsafe(no_mangle)]
     pub extern "C" fn ignis_notifications_glib_service_get_type() -> glib::ffi::GType {
-        <super::super::IgnisNotificationsGLibServiceWrapped as StaticType>::static_type().into_glib()
+        <super::super::IgnisNotificationsGLibServiceWrapped as StaticType>::static_type()
+            .into_glib()
     }
 
     #[unsafe(no_mangle)]
@@ -62,30 +64,30 @@ pub(crate) mod ffi {
         callback: gio::ffi::GAsyncReadyCallback,
         user_data: *mut c_void,
     ) {
-        unsafe {
-            let imp = (*this).imp();
-            let obj = &super::super::IgnisNotificationsGLibServiceWrapped::from_glib_none(this);
-            let cancellable = gio::Cancellable::from_glib_borrow(cancellable);
+        let imp = unsafe { (*this).imp() };
+        let obj =
+            unsafe { &super::super::IgnisNotificationsGLibServiceWrapped::from_glib_none(this) };
 
-            let closure =
-                move |task: gio::LocalTask<bool>,
-                      _: Option<&super::super::IgnisNotificationsGLibServiceWrapped>| {
-                    let result: *mut gio::ffi::GAsyncResult =
-                        task.upcast_ref::<gio::AsyncResult>().to_glib_none().0;
+        let cancellable = unsafe { gio::Cancellable::from_glib_none(cancellable) };
 
-                    if let Some(func) = callback {
-                        func(this as *mut _, result, user_data)
-                    }
-                };
+        let closure =
+            move |task: gio::LocalTask<bool>,
+                  _: Option<&super::super::IgnisNotificationsGLibServiceWrapped>| {
+                let result: *mut gio::ffi::GAsyncResult =
+                    task.upcast_ref::<gio::AsyncResult>().to_glib_none().0;
 
-            let task = gio::LocalTask::new(Some(obj), Some(&*cancellable), closure);
+                if let Some(func) = callback {
+                    unsafe { func(this as *mut _, result, user_data) }
+                }
+            };
 
-            glib::MainContext::ref_thread_default().spawn_local(async move {
-                let _guard = runtime().enter();
-                let res = imp.run_async().await.map(|_| true);
-                task.return_result(res);
-            });
-        };
+        let task = unsafe { gio::LocalTask::new(Some(obj), Some(&cancellable), closure) };
+
+        glib::MainContext::ref_thread_default().spawn_local(async move {
+            let _guard = runtime().enter();
+            let res = imp.run_async().await.map(|_| true);
+            task.return_result(res);
+        });
     }
 
     #[unsafe(no_mangle)]
@@ -94,18 +96,16 @@ pub(crate) mod ffi {
         res: *mut gio::ffi::GAsyncResult,
         error: *mut *mut glib::ffi::GError,
     ) -> bool {
-        unsafe {
-            let task = gio::Task::<bool>::from_glib_none(res as *mut gio::ffi::GTask);
+        let task = unsafe { gio::Task::<bool>::from_glib_none(res as *mut gio::ffi::GTask) };
 
-            return match task.propagate() {
-                Ok(_) => true,
-                Err(e) => {
-                    if !error.is_null() {
-                        *error = e.into_glib_ptr();
-                    }
-                    false
+        return match unsafe { task.propagate() } {
+            Ok(_) => true,
+            Err(e) => {
+                if !error.is_null() {
+                    unsafe { *error = e.into_glib_ptr() };
                 }
-            };
+                false
+            }
         };
     }
 }
