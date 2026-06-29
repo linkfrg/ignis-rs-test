@@ -1,59 +1,132 @@
 import asyncio
+import random
+import string
 
 import gi
+import pytest
 
 gi.require_version("IgnisNotificationsGLib", "0.1")
 from gi.events import GLibEventLoopPolicy  # noqa: E402
-from gi.repository import GLib, IgnisNotificationsGLib  # noqa: E402 # type: ignore
+from gi.repository import (  # noqa: E402
+    Gio,  # type: ignore
+    GLib,  # type: ignore
+    IgnisNotificationsGLib,  # type: ignore
+)
 
 
+def generate_random_string() -> str:
+    return "".join(random.choices(string.ascii_letters, k=20))
+
+
+async def send_random_notification() -> tuple[str, str]:
+    summary = generate_random_string()
+    body = generate_random_string()
+
+    proc = await asyncio.create_subprocess_exec(
+        "notify-send",
+        summary,
+        body,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+
+    stdout, stderr = await proc.communicate()
+
+    if proc.returncode != 0:
+        print(stdout)
+        print(stderr)
+
+    assert proc.returncode == 0
+    # TODO: return a dataclass containing sent notification info
+    # also, generate random app name, icon, urgency, replace id, timeout
+    return summary, body
+
+
+@pytest.fixture(scope="session", autouse=True)
 def setup_asyncio():
-    policy = GLibEventLoopPolicy()
-    asyncio.set_event_loop_policy(policy)
+    asyncio.set_event_loop_policy(GLibEventLoopPolicy())
 
 
-def test_notification():
-    setup_asyncio()
-    mainloop = GLib.MainLoop()
+@pytest.fixture
+def run_in_glib():
+    def run(coro):
+        mainloop = GLib.MainLoop()
+        exception = None
 
-    test_exception = None
+        async def wrapper():
+            return await coro
 
-    async def async_run():
-        a = IgnisNotificationsGLib.Service.new()
-        await a.run_async()
+        def done(task):
+            nonlocal exception
+            try:
+                task.result()
+            except Exception as e:
+                exception = e
+            finally:
+                mainloop.quit()
 
-        subprocess = await asyncio.create_subprocess_exec(
-            "notify-send",
-            "summary",
-            "body",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        def start():
+            task = asyncio.create_task(wrapper())
+            task.add_done_callback(done)
 
-        stdout, stderr = await subprocess.communicate()
-        print(f"notify-send exited with\nstdout: {stdout}\nstderr: {stderr}")
+        GLib.idle_add(start)
+        mainloop.run()
 
-        assert subprocess.returncode == 0
+        if exception:
+            raise exception
 
-    def on_task_done(task):
-        nonlocal test_exception
-        try:
-            task.result()
-        except Exception as e:
-            test_exception = e
-
-        mainloop.quit()
-
-    def main():
-        task = asyncio.create_task(async_run())
-        task.add_done_callback(on_task_done)
-
-    GLib.idle_add(main)
-    mainloop.run()
-
-    if test_exception:
-        raise test_exception
+    return run
 
 
-if __name__ == "__main__":
-    test_notification()
+@pytest.fixture
+def notification_service(run_in_glib):
+    service = None
+
+    async def start():
+        nonlocal service
+        service = IgnisNotificationsGLib.Service.new()
+        await service.run_async()
+
+    run_in_glib(start())
+
+    yield service
+
+
+def test_notify(run_in_glib, notification_service):
+    async def test():
+        summary, body = await send_random_notification()
+        latest = notification_service.get_notifications()[-1]
+
+        assert latest.get_summary() == summary
+        assert latest.get_body() == body
+
+    run_in_glib(test())
+
+
+def test_property(notification_service):
+    assert isinstance(notification_service.props.notifications, Gio.ListStore)
+    for i in notification_service.get_property("notifications"):
+        assert isinstance(i, IgnisNotificationsGLib.Notification)
+
+
+def test_signals(run_in_glib, notification_service):
+    received_signal_notified: bool = False
+    received_notify_notifications: bool = False
+
+    def on_notify_notification(x, _):
+        nonlocal received_notify_notifications
+        received_notify_notifications = True
+
+    def on_new_notification(x, id_, replace):
+        nonlocal received_signal_notified
+        received_signal_notified = True
+
+    async def test():
+        notification_service.connect("notified", on_new_notification)
+        notification_service.connect("notify::notifications", on_notify_notification)
+        await send_random_notification()
+
+    run_in_glib(test())
+
+    assert received_signal_notified
+    assert received_notify_notifications

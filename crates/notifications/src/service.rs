@@ -14,28 +14,25 @@ pub struct NotificationService {
     data: Arc<Mutex<ServiceData>>,
     connection: Mutex<Option<Connection>>,
     tx: mpsc::Sender<NotificationServiceSignal>,
+    rx: Arc<Mutex<mpsc::Receiver<NotificationServiceSignal>>>,
 }
 
 impl NotificationService {
-    pub fn new(outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>) -> Self {
-        let (tx, mut rx) = mpsc::channel(32);
-
-        if let Some(outer_tx) = outer_tx.clone() {
-            tokio::spawn(async move {
-                while let Some(signal) = rx.recv().await {
-                    let _ = outer_tx.send(signal).await;
-                }
-            });
-        }
+    pub fn new() -> Self {
+        let (tx, rx) = mpsc::channel(32);
 
         Self {
             data: Arc::new(Mutex::new(ServiceData::new())),
             connection: Mutex::new(None),
             tx: tx,
+            rx: Arc::new(Mutex::new(rx)),
         }
     }
 
-    pub async fn run(&self) -> Result<()> {
+    pub async fn run(
+        &self,
+        outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>,
+    ) -> Result<()> {
         let service = DBusService::new(Arc::clone(&self.data), self.tx.clone());
 
         let connection = Builder::session()?
@@ -45,6 +42,15 @@ impl NotificationService {
             .await?;
 
         *self.connection.lock().await = Some(connection);
+
+        let rx = Arc::clone(&self.rx);
+        if let Some(outer_tx) = outer_tx.clone() {
+            tokio::spawn(async move {
+                while let Some(signal) = rx.lock().await.recv().await {
+                    let _ = outer_tx.send(signal).await;
+                }
+            });
+        }
 
         Ok(())
     }
@@ -92,11 +98,15 @@ impl NotificationService {
             .cloned()
             .collect()
     }
+
+    pub async fn get_notification_by_id(&self, id: u32) -> Option<Notification> {
+        self.data.lock().await.notifications.get(&id).cloned()
+    }
 }
 
 impl Default for NotificationService {
     fn default() -> Self {
-        Self::new(None)
+        Self::new()
     }
 }
 
@@ -112,8 +122,8 @@ mod tests {
         let summary = "test summary 1";
         let body = "test body 1";
 
-        let service = NotificationService::new(None);
-        service.run().await.unwrap();
+        let service = NotificationService::new();
+        service.run(None).await.unwrap();
         println!("After service run");
 
         let output = Command::new("notify-send")

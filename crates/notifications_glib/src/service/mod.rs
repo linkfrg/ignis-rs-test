@@ -8,7 +8,6 @@ glib::wrapper! {
     pub struct IgnisNotificationsGLibServiceWrapped(ObjectSubclass<imp::IgnisNotificationsGLibServiceImp>);
 }
 
-
 impl IgnisNotificationsGLibServiceWrapped {
     pub fn new() -> Self {
         Object::builder().build()

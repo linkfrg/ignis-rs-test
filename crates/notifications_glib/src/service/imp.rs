@@ -1,13 +1,19 @@
 use crate::error::IgnisNotificationsGLibErrorImp;
+use crate::notification::GNotificationWrapped;
 use glib::prelude::*;
-use glib::subclass::prelude::*;
+use glib::subclass::{Signal, prelude::*};
+use glib::translate::*;
+use notifications::NotificationServiceSignal;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::sync::OnceLock;
 use tokio::runtime::Runtime;
-use tokio::sync::Mutex;
+use tokio::sync::mpsc;
 
 #[derive(Default)]
 pub struct IgnisNotificationsGLibServiceImp {
-    pub service: Mutex<notifications::NotificationService>,
+    pub service: notifications::NotificationService,
+    pub notifications: RefCell<HashMap<u32, GNotificationWrapped>>,
 }
 
 #[glib::object_subclass]
@@ -17,16 +23,107 @@ impl ObjectSubclass for IgnisNotificationsGLibServiceImp {
     type ParentType = glib::Object;
 }
 
-impl ObjectImpl for IgnisNotificationsGLibServiceImp {}
+fn vec_to_list_store(vec: Vec<GNotificationWrapped>) -> gio::ListStore {
+    let store = gio::ListStore::new::<GNotificationWrapped>();
+
+    for notification in vec {
+        store.append(&notification);
+    }
+
+    store
+}
+
+impl ObjectImpl for IgnisNotificationsGLibServiceImp {
+    fn signals() -> &'static [glib::subclass::Signal] {
+        static SIGNALS: OnceLock<Vec<Signal>> = OnceLock::new();
+        SIGNALS.get_or_init(|| {
+            vec![
+                Signal::builder("notified")
+                    .param_types([u32::static_type(), bool::static_type()])
+                    .build(),
+                Signal::builder("closed")
+                    .param_types([u32::static_type()])
+                    .build(),
+            ]
+        })
+    }
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: OnceLock<Vec<glib::ParamSpec>> = OnceLock::new();
+
+        PROPERTIES.get_or_init(|| {
+            vec![
+                glib::ParamSpecObject::builder::<gio::ListStore>("notifications")
+                    .read_only()
+                    .build(),
+            ]
+        })
+    }
+
+    fn property(&self, _id: usize, _pspec: &glib::ParamSpec) -> glib::Value {
+        match _pspec.name() {
+            "notifications" => vec_to_list_store(self.get_notifications()).to_value(),
+            _ => unimplemented!(),
+        }
+    }
+}
 
 impl IgnisNotificationsGLibServiceImp {
     pub async fn run_async(&self) -> Result<(), glib::Error> {
-        self.service.lock().await.run().await.map_err(|e| {
+        let (tx, mut rx) = mpsc::channel::<NotificationServiceSignal>(32);
+
+        self.service.run(Some(tx)).await.map_err(|e| {
             let msg = &e.to_string();
             glib::Error::new(<IgnisNotificationsGLibErrorImp as From<_>>::from(e), msg)
         })?;
 
+        *self.notifications.borrow_mut() = self
+            .service
+            .get_notifications()
+            .await
+            .into_iter()
+            .map(|n| (n.id, GNotificationWrapped::new_from_rust(n)))
+            .collect();
+
+        let obj = self.obj().to_owned();
+
+        glib::MainContext::default().spawn_local(async move {
+            while let Some(signal) = rx.recv().await {
+                match signal {
+                    NotificationServiceSignal::Closed { id } => {
+                        obj.imp().notifications.borrow_mut().remove(&id);
+                        obj.notify("notifications");
+                        obj.emit_by_name_with_values("closed", &[id.to_value()]);
+                    }
+                    NotificationServiceSignal::Notified { id, replace } => {
+                        // TODO: implement replace
+                        let notification = obj.imp().service.get_notification_by_id(id).await;
+                        if let Some(notification) = notification {
+                            obj.imp()
+                                .notifications
+                                .borrow_mut()
+                                .insert(id, GNotificationWrapped::new_from_rust(notification));
+                        }
+
+                        obj.notify("notifications");
+                        obj.emit_by_name_with_values(
+                            "notified",
+                            &[id.to_value(), replace.to_value()],
+                        );
+                    }
+                }
+            }
+        });
+
         Ok(())
+    }
+
+    pub fn get_notifications(&self) -> Vec<GNotificationWrapped> {
+        let mut unsorted: Vec<GNotificationWrapped> =
+            self.notifications.borrow().values().cloned().collect();
+
+        unsorted.sort_by_key(|v| v.imp().notification.borrow().id);
+
+        unsorted
     }
 }
 
@@ -37,7 +134,6 @@ fn runtime() -> &'static Runtime {
 
 pub(crate) mod ffi {
     use super::*;
-    use glib::translate::*;
     use std::ffi::c_void;
 
     pub type IgnisNotificationsGLibService =
@@ -107,5 +203,13 @@ pub(crate) mod ffi {
                 false
             }
         };
+    }
+
+    #[unsafe(no_mangle)]
+    pub unsafe extern "C" fn ignis_notifications_glib_service_get_notifications(
+        this: *mut IgnisNotificationsGLibService,
+    ) -> *mut glib::ffi::GList {
+        let imp = unsafe { (*this).imp() };
+        imp.get_notifications().to_glib_full()
     }
 }

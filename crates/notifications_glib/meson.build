@@ -3,6 +3,7 @@ project('ignis-notifications-glib', 'rust', version: '0.1')
 HEADERS = [
   'include/ignis-notifications-glib/service.h',
   'include/ignis-notifications-glib/error.h',
+  'include/ignis-notifications-glib/notification.h',
 ]
 MAIN_HEADER_FILE = 'ignis-notifications-glib/ignis-notifications-glib.h'
 NAMESPACE = 'IgnisNotificationsGLib'
