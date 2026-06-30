@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::sync::OnceLock;
 
 use glib::prelude::*;
 use glib::subclass::prelude::*;
@@ -16,8 +17,43 @@ impl ObjectSubclass for GNotificationImp {
     type ParentType = glib::Object;
 }
 
-impl ObjectImpl for GNotificationImp {}
+impl ObjectImpl for GNotificationImp {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: OnceLock<Vec<glib::ParamSpec>> = OnceLock::new();
+        PROPERTIES.get_or_init(|| {
+            vec![
+                glib::ParamSpecUInt::builder("id").read_only().build(),
+                glib::ParamSpecString::builder("app-name")
+                    .read_only()
+                    .build(),
+                glib::ParamSpecString::builder("icon").read_only().build(),
+                glib::ParamSpecString::builder("summary")
+                    .read_only()
+                    .build(),
+                glib::ParamSpecString::builder("body").read_only().build(),
+                glib::ParamSpecBoxed::builder::<glib::StrV>("actions")
+                    .read_only()
+                    .build(),
+                glib::ParamSpecUInt::builder("urgency").read_only().build(),
+                glib::ParamSpecInt::builder("timeout").read_only().build(),
+            ]
+        })
+    }
 
+    fn property(&self, _id: usize, _pspec: &glib::ParamSpec) -> glib::Value {
+        match _pspec.name() {
+            "id" => self.get_id().to_value(),
+            "app-name" => self.get_app_name().to_value(),
+            "icon" => self.get_icon().to_value(),
+            "summary" => self.get_summary().to_value(),
+            "body" => self.get_body().to_value(),
+            "actions" => self.get_actions().to_value(),
+            "urgency" => (self.get_urgency() as u32).to_value(),
+            "timeout" => self.get_timeout().to_value(),
+            _ => unimplemented!(),
+        }
+    }
+}
 impl GNotificationImp {
     pub fn get_id(&self) -> u32 {
         self.notification.borrow().id

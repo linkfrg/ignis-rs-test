@@ -130,3 +130,31 @@ def test_signals(run_in_glib, notification_service):
 
     assert received_signal_notified
     assert received_notify_notifications
+
+
+def test_notification_properties(run_in_glib, notification_service):
+    async def test():
+        await send_random_notification()
+        latest = notification_service.props.notifications[-1]
+
+        assert isinstance(latest.get_id(), int)
+        assert isinstance(latest.get_app_name(), str)
+        assert isinstance(latest.get_icon(), str)
+        assert isinstance(latest.get_summary(), str)
+        assert isinstance(latest.get_body(), str)
+        assert isinstance(latest.get_actions(), list)
+        assert isinstance(latest.get_urgency(), int)
+        assert isinstance(latest.get_timeout(), int)
+
+        print(latest.props.id)
+
+        assert latest.props.id == latest.get_id()
+        assert latest.props.app_name == latest.get_app_name()
+        assert latest.props.icon == latest.get_icon()
+        assert latest.props.summary == latest.get_summary()
+        assert latest.props.body == latest.get_body()
+        assert latest.props.actions == latest.get_actions()
+        assert latest.props.urgency == latest.get_urgency()
+        assert latest.props.timeout == latest.get_timeout()
+
+    run_in_glib(test())
