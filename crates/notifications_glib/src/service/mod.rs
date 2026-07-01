@@ -5,10 +5,10 @@ use glib::subclass::prelude::*;
 use glib::translate::*;
 
 glib::wrapper! {
-    pub struct IgnisNotificationsGLibServiceWrapped(ObjectSubclass<imp::IgnisNotificationsGLibServiceImp>);
+    pub struct GNotificationService(ObjectSubclass<imp::GNotificationServiceImp>);
 }
 
-impl IgnisNotificationsGLibServiceWrapped {
+impl GNotificationService {
     pub fn new() -> Self {
         Object::builder().build()
     }

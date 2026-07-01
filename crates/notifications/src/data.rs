@@ -1,5 +1,5 @@
 use crate::constants::FILE_PATH;
-use crate::notification::Notification;
+use crate::notification::DesktopNotification;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -7,7 +7,7 @@ use std::fs;
 #[derive(Serialize, Deserialize)]
 pub struct ServiceData {
     pub counter: u32,
-    pub notifications: HashMap<u32, Notification>,
+    pub notifications: HashMap<u32, DesktopNotification>,
 }
 
 impl ServiceData {
@@ -30,7 +30,12 @@ impl ServiceData {
             notifications: HashMap::new(),
         }
     }
-    pub fn add_notification(&mut self, id: u32, new_notification: Notification, replace: bool) {
+    pub fn add_notification(
+        &mut self,
+        id: u32,
+        new_notification: DesktopNotification,
+        replace: bool,
+    ) {
         if !replace {
             self.notifications.insert(id, new_notification.clone());
         } else {

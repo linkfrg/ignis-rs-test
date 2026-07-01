@@ -3,21 +3,21 @@ use std::sync::OnceLock;
 
 use glib::prelude::*;
 use glib::subclass::prelude::*;
-use notifications::Notification;
+use notifications::DesktopNotification;
 
 #[derive(Default)]
-pub struct GNotificationImp {
-    pub notification: RefCell<Notification>,
+pub struct GDesktopNotificationImp {
+    pub notification: RefCell<DesktopNotification>,
 }
 
 #[glib::object_subclass]
-impl ObjectSubclass for GNotificationImp {
+impl ObjectSubclass for GDesktopNotificationImp {
     const NAME: &'static str = "IgnisNotificationsGLibNotification";
-    type Type = super::GNotificationWrapped;
+    type Type = super::GDesktopNotification;
     type ParentType = glib::Object;
 }
 
-impl ObjectImpl for GNotificationImp {
+impl ObjectImpl for GDesktopNotificationImp {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: OnceLock<Vec<glib::ParamSpec>> = OnceLock::new();
         PROPERTIES.get_or_init(|| {
@@ -54,7 +54,7 @@ impl ObjectImpl for GNotificationImp {
         }
     }
 }
-impl GNotificationImp {
+impl GDesktopNotificationImp {
     pub fn get_id(&self) -> u32 {
         self.notification.borrow().id
     }
@@ -93,19 +93,19 @@ pub(crate) mod ffi {
     use glib::translate::*;
 
     pub type IgnisNotificationsGLibNotification =
-        <super::GNotificationImp as super::ObjectSubclass>::Instance;
+        <super::GDesktopNotificationImp as super::ObjectSubclass>::Instance;
 
     #[unsafe(no_mangle)]
     pub unsafe extern "C" fn ignis_notifications_glib_notification_new()
     -> *mut IgnisNotificationsGLibNotification {
-        glib::Object::builder::<super::super::GNotificationWrapped>()
+        glib::Object::builder::<super::super::GDesktopNotification>()
             .build()
             .to_glib_full()
     }
 
     #[unsafe(no_mangle)]
     pub extern "C" fn ignis_notifications_glib_notification_get_type() -> glib::ffi::GType {
-        <super::super::GNotificationWrapped as StaticType>::static_type().into_glib()
+        <super::super::GDesktopNotification as StaticType>::static_type().into_glib()
     }
 
     #[unsafe(no_mangle)]

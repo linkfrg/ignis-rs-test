@@ -1,5 +1,5 @@
-use crate::error::IgnisNotificationsGLibErrorImp;
-use crate::notification::GNotificationWrapped;
+use crate::error::GNotificationServiceError;
+use crate::notification::GDesktopNotification;
 use glib::prelude::*;
 use glib::subclass::{Signal, prelude::*};
 use glib::translate::*;
@@ -12,20 +12,20 @@ use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 
 #[derive(Default)]
-pub struct IgnisNotificationsGLibServiceImp {
+pub struct GNotificationServiceImp {
     pub service: notifications::NotificationService,
-    pub notifications: RefCell<HashMap<u32, GNotificationWrapped>>,
+    pub notifications: RefCell<HashMap<u32, GDesktopNotification>>,
 }
 
 #[glib::object_subclass]
-impl ObjectSubclass for IgnisNotificationsGLibServiceImp {
+impl ObjectSubclass for GNotificationServiceImp {
     const NAME: &'static str = "IgnisNotificationsGLibService";
-    type Type = super::IgnisNotificationsGLibServiceWrapped;
+    type Type = super::GNotificationService;
     type ParentType = glib::Object;
 }
 
-fn vec_to_list_store(vec: Vec<GNotificationWrapped>) -> gio::ListStore {
-    let store = gio::ListStore::new::<GNotificationWrapped>();
+fn vec_to_list_store(vec: Vec<GDesktopNotification>) -> gio::ListStore {
+    let store = gio::ListStore::new::<GDesktopNotification>();
 
     for notification in vec {
         store.append(&notification);
@@ -34,7 +34,7 @@ fn vec_to_list_store(vec: Vec<GNotificationWrapped>) -> gio::ListStore {
     store
 }
 
-impl ObjectImpl for IgnisNotificationsGLibServiceImp {
+impl ObjectImpl for GNotificationServiceImp {
     fn signals() -> &'static [glib::subclass::Signal] {
         static SIGNALS: OnceLock<Vec<Signal>> = OnceLock::new();
         SIGNALS.get_or_init(|| {
@@ -68,21 +68,21 @@ impl ObjectImpl for IgnisNotificationsGLibServiceImp {
     }
 }
 
-impl IgnisNotificationsGLibServiceImp {
+impl GNotificationServiceImp {
     pub async fn run_async(&self) -> Result<(), glib::Error> {
         let (tx, mut rx) = mpsc::channel::<NotificationServiceSignal>(32);
 
         self.service
             .run(Some(tx))
             .await
-            .into_glib_error::<IgnisNotificationsGLibErrorImp>()?;
+            .into_glib_error::<GNotificationServiceError>()?;
 
         *self.notifications.borrow_mut() = self
             .service
             .get_notifications()
             .await
             .into_iter()
-            .map(|n| (n.id, GNotificationWrapped::new_from_rust(n)))
+            .map(|n| (n.id, GDesktopNotification::new_from_rust(n)))
             .collect();
 
         let obj = self.obj().to_owned();
@@ -102,7 +102,7 @@ impl IgnisNotificationsGLibServiceImp {
                             obj.imp()
                                 .notifications
                                 .borrow_mut()
-                                .insert(id, GNotificationWrapped::new_from_rust(notification));
+                                .insert(id, GDesktopNotification::new_from_rust(notification));
                         }
 
                         obj.notify("notifications");
@@ -118,8 +118,8 @@ impl IgnisNotificationsGLibServiceImp {
         Ok(())
     }
 
-    pub fn get_notifications(&self) -> Vec<GNotificationWrapped> {
-        let mut unsorted: Vec<GNotificationWrapped> =
+    pub fn get_notifications(&self) -> Vec<GDesktopNotification> {
+        let mut unsorted: Vec<GDesktopNotification> =
             self.notifications.borrow().values().cloned().collect();
 
         unsorted.sort_by_key(|v| v.imp().notification.borrow().id);
@@ -131,7 +131,7 @@ impl IgnisNotificationsGLibServiceImp {
         self.service
             .close_notification(notification_id)
             .await
-            .into_glib_error::<IgnisNotificationsGLibErrorImp>()
+            .into_glib_error::<GNotificationServiceError>()
     }
 
     pub async fn invoke_action(
@@ -142,7 +142,7 @@ impl IgnisNotificationsGLibServiceImp {
         self.service
             .invoke_action(notification_id, action_key)
             .await
-            .into_glib_error::<IgnisNotificationsGLibErrorImp>()
+            .into_glib_error::<GNotificationServiceError>()
     }
 }
 
@@ -156,25 +156,24 @@ pub(crate) mod ffi {
     use std::ffi::c_void;
 
     pub type IgnisNotificationsGLibService =
-        <super::IgnisNotificationsGLibServiceImp as super::ObjectSubclass>::Instance;
+        <super::GNotificationServiceImp as super::ObjectSubclass>::Instance;
 
     #[unsafe(no_mangle)]
     pub unsafe extern "C" fn ignis_notifications_glib_service_new()
     -> *mut IgnisNotificationsGLibService {
-        glib::Object::builder::<super::super::IgnisNotificationsGLibServiceWrapped>()
+        glib::Object::builder::<super::super::GNotificationService>()
             .build()
             .to_glib_full()
     }
 
     #[unsafe(no_mangle)]
     pub extern "C" fn ignis_notifications_glib_service_get_type() -> glib::ffi::GType {
-        <super::super::IgnisNotificationsGLibServiceWrapped as StaticType>::static_type()
-            .into_glib()
+        <super::super::GNotificationService as StaticType>::static_type().into_glib()
     }
 
     glib_async_method!(
         IgnisNotificationsGLibService,
-        super::super::IgnisNotificationsGLibServiceWrapped,
+        super::super::GNotificationService,
         ignis_notifications_glib_service_run_async,
         ignis_notifications_glib_service_run_finish,
         run_async,
@@ -182,7 +181,7 @@ pub(crate) mod ffi {
 
     glib_async_method!(
         IgnisNotificationsGLibService,
-        super::super::IgnisNotificationsGLibServiceWrapped,
+        super::super::GNotificationService,
         ignis_notifications_glib_service_close_notification_async,
         ignis_notifications_glib_service_close_notification_finish,
         close_notification,
@@ -191,7 +190,7 @@ pub(crate) mod ffi {
 
     glib_async_method!(
         IgnisNotificationsGLibService,
-        super::super::IgnisNotificationsGLibServiceWrapped,
+        super::super::GNotificationService,
         ignis_notifications_glib_service_invoke_action_async,
         ignis_notifications_glib_service_invoke_action_finish,
         invoke_action,

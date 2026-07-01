@@ -1,4 +1,4 @@
-use crate::Notification;
+use crate::DesktopNotification;
 use crate::data::ServiceData;
 use crate::dbus::{DBusService, DBusServiceSignals};
 use crate::error::{NotificationServiceError, Result};
@@ -89,7 +89,7 @@ impl NotificationService {
         Ok(())
     }
 
-    pub async fn get_notifications(&self) -> Vec<Notification> {
+    pub async fn get_notifications(&self) -> Vec<DesktopNotification> {
         self.data
             .lock()
             .await
@@ -99,7 +99,7 @@ impl NotificationService {
             .collect()
     }
 
-    pub async fn get_notification_by_id(&self, id: u32) -> Option<Notification> {
+    pub async fn get_notification_by_id(&self, id: u32) -> Option<DesktopNotification> {
         self.data.lock().await.notifications.get(&id).cloned()
     }
 }

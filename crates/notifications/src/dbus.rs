@@ -1,7 +1,7 @@
 use crate::NotificationServiceSignal;
 use crate::constants::IMAGE_DIR;
 use crate::data::ServiceData;
-use crate::notification::Notification;
+use crate::notification::DesktopNotification;
 use gdk_pixbuf::{Colorspace, Pixbuf};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -41,7 +41,7 @@ impl DBusService {
             id = data.counter;
         }
 
-        let new_notification = Notification {
+        let new_notification = DesktopNotification {
             id: id,
             app_name: app_name.to_string(),
             icon: self.get_icon(app_icon, &hints, id),
@@ -57,7 +57,8 @@ impl DBusService {
 
         data.add_notification(id, new_notification, replace);
 
-        let _ = self.tx
+        let _ = self
+            .tx
             .send(NotificationServiceSignal::Notified { id, replace })
             .await;
 

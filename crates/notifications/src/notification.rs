@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize, Default)]
-pub struct Notification {
+pub struct DesktopNotification {
     pub id: u32,
     pub app_name: String,
     pub icon: Option<String>,
