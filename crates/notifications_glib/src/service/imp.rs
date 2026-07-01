@@ -6,7 +6,7 @@ use glib::translate::*;
 use glib_utils::{IntoGLibError, glib_async_method};
 use notifications::NotificationServiceSignal;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::OnceLock;
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
@@ -14,7 +14,7 @@ use tokio::sync::mpsc;
 #[derive(Default)]
 pub struct GNotificationServiceImp {
     pub service: notifications::NotificationService,
-    pub notifications: RefCell<HashMap<u32, GDesktopNotification>>,
+    pub notifications: RefCell<BTreeMap<u32, GDesktopNotification>>,
 }
 
 #[glib::object_subclass]
@@ -119,12 +119,7 @@ impl GNotificationServiceImp {
     }
 
     pub fn get_notifications(&self) -> Vec<GDesktopNotification> {
-        let mut unsorted: Vec<GDesktopNotification> =
-            self.notifications.borrow().values().cloned().collect();
-
-        unsorted.sort_by_key(|v| v.imp().notification.borrow().id);
-
-        unsorted
+        self.notifications.borrow().values().cloned().collect()
     }
 
     pub async fn close_notification(&self, notification_id: u32) -> Result<(), glib::Error> {

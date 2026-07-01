@@ -1,13 +1,13 @@
 use crate::constants::FILE_PATH;
 use crate::notification::DesktopNotification;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs;
 
 #[derive(Serialize, Deserialize)]
 pub struct ServiceData {
     pub counter: u32,
-    pub notifications: HashMap<u32, DesktopNotification>,
+    pub notifications: BTreeMap<u32, DesktopNotification>,
 }
 
 impl ServiceData {
@@ -27,7 +27,7 @@ impl ServiceData {
     fn new_empty() -> Self {
         Self {
             counter: 0,
-            notifications: HashMap::new(),
+            notifications: BTreeMap::new(),
         }
     }
     pub fn add_notification(
