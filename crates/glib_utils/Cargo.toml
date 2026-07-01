@@ -1,0 +1,8 @@
+[package]
+name = "glib_utils"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+glib.workspace = true
+gio.workspace = true

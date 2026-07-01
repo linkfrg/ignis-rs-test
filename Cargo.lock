@@ -485,6 +485,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "glib_utils"
+version = "0.1.0"
+dependencies = [
+ "gio",
+ "glib",
+]
+
+[[package]]
 name = "gobject-sys"
 version = "0.22.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -634,6 +642,7 @@ version = "0.1.0"
 dependencies = [
  "gio",
  "glib",
+ "glib_utils",
  "notifications",
  "tokio",
 ]

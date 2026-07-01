@@ -8,6 +8,7 @@ glib.workspace = true
 gio.workspace = true
 tokio.workspace = true
 
+glib_utils.workspace = true
 notifications = {path = "../notifications"}
 
 [lib]

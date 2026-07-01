@@ -6,9 +6,6 @@ pub enum IgnisNotificationsGLibErrorImp {
     DBusError,
     NoConnection,
 }
-pub trait IntoGLibError<T> {
-    fn into_glib_error(self) -> Result<T, glib::Error>;
-}
 
 impl From<&NotificationServiceError> for IgnisNotificationsGLibErrorImp {
     fn from(e: &NotificationServiceError) -> Self {
@@ -16,15 +13,6 @@ impl From<&NotificationServiceError> for IgnisNotificationsGLibErrorImp {
             NotificationServiceError::NoConnection => IgnisNotificationsGLibErrorImp::NoConnection,
             NotificationServiceError::DBusError(_) => IgnisNotificationsGLibErrorImp::DBusError,
         }
-    }
-}
-
-impl<T> IntoGLibError<T> for Result<T, NotificationServiceError> {
-    fn into_glib_error(self) -> Result<T, glib::Error> {
-        self.map_err(|e| {
-            let domain = IgnisNotificationsGLibErrorImp::from(&e);
-            glib::Error::new(domain, &e.to_string())
-        })
     }
 }
 
