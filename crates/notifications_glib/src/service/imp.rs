@@ -1,4 +1,4 @@
-use crate::error::IgnisNotificationsGLibErrorImp;
+use crate::error::IntoGLibError;
 use crate::notification::GNotificationWrapped;
 use glib::prelude::*;
 use glib::subclass::{Signal, prelude::*};
@@ -71,10 +71,7 @@ impl IgnisNotificationsGLibServiceImp {
     pub async fn run_async(&self) -> Result<(), glib::Error> {
         let (tx, mut rx) = mpsc::channel::<NotificationServiceSignal>(32);
 
-        self.service.run(Some(tx)).await.map_err(|e| {
-            let msg = &e.to_string();
-            glib::Error::new(<IgnisNotificationsGLibErrorImp as From<_>>::from(e), msg)
-        })?;
+        self.service.run(Some(tx)).await.into_glib_error()?;
 
         *self.notifications.borrow_mut() = self
             .service
@@ -125,11 +122,108 @@ impl IgnisNotificationsGLibServiceImp {
 
         unsorted
     }
+
+    pub async fn close_notification(&self, notification_id: u32) -> Result<(), glib::Error> {
+        self.service
+            .close_notification(notification_id)
+            .await
+            .into_glib_error()
+    }
+
+    pub async fn invoke_action(
+        &self,
+        notification_id: u32,
+        action_key: &str,
+    ) -> Result<(), glib::Error> {
+        self.service
+            .invoke_action(notification_id, action_key)
+            .await
+            .into_glib_error()
+    }
 }
 
 fn runtime() -> &'static Runtime {
     static RUNTIME: OnceLock<Runtime> = OnceLock::new();
     RUNTIME.get_or_init(|| Runtime::new().expect("Setting up tokio runtime needs to succeed."))
+}
+
+macro_rules! glib_async_method {
+    ($this_type:ty,
+    $wrapper_type:ty,
+    $async_method_name:ident,
+    $finish_method_name:ident,
+    $imp_method:ident
+    $(
+        ,
+        $arg_name:ident : $arg_ty:ty => $convert:expr
+    )*
+    $(,)?
+) => {
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn $async_method_name(
+            this: *mut $this_type,
+            $(
+                $arg_name: $arg_ty,
+            )*
+            cancellable: *mut gio::ffi::GCancellable,
+            callback: gio::ffi::GAsyncReadyCallback,
+            user_data: *mut c_void,
+        ) {
+            let imp = unsafe { (*this).imp() };
+            let obj = unsafe { &<$wrapper_type>::from_glib_none(this) };
+
+            let cancellable = unsafe { gio::Cancellable::from_glib_none(cancellable) };
+
+            let closure = move |task: gio::LocalTask<bool>, _: Option<&$wrapper_type>| {
+                let result: *mut gio::ffi::GAsyncResult =
+                    task.upcast_ref::<gio::AsyncResult>().to_glib_none().0;
+
+                if let Some(func) = callback {
+                    unsafe { func(this as *mut _, result, user_data) }
+                }
+            };
+
+            let task = unsafe { gio::LocalTask::new(Some(obj), Some(&cancellable), closure) };
+
+            glib::MainContext::ref_thread_default().spawn_local(async move {
+                let _guard = runtime().enter();
+
+                $(
+                    let $arg_name = $convert;
+                )*
+
+                let res = imp.
+                        $imp_method(
+                            $(
+                                $arg_name,
+                            )*
+                        )
+                        .await
+                        .map(|_| true);
+
+                task.return_result(res);
+            });
+        }
+
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn $finish_method_name(
+            _this: *mut $this_type,
+            res: *mut gio::ffi::GAsyncResult,
+            error: *mut *mut glib::ffi::GError,
+        ) -> bool {
+            let task = unsafe { gio::Task::<bool>::from_glib_none(res as *mut gio::ffi::GTask) };
+
+            return match unsafe { task.propagate() } {
+                Ok(_) => true,
+                Err(e) => {
+                    if !error.is_null() {
+                        unsafe { *error = e.into_glib_ptr() };
+                    }
+                    false
+                }
+            };
+        }
+    };
 }
 
 pub(crate) mod ffi {
@@ -153,57 +247,35 @@ pub(crate) mod ffi {
             .into_glib()
     }
 
-    #[unsafe(no_mangle)]
-    pub unsafe extern "C" fn ignis_notifications_glib_service_run_async(
-        this: *mut IgnisNotificationsGLibService,
-        cancellable: *mut gio::ffi::GCancellable,
-        callback: gio::ffi::GAsyncReadyCallback,
-        user_data: *mut c_void,
-    ) {
-        let imp = unsafe { (*this).imp() };
-        let obj =
-            unsafe { &super::super::IgnisNotificationsGLibServiceWrapped::from_glib_none(this) };
+    glib_async_method!(
+        IgnisNotificationsGLibService,
+        super::super::IgnisNotificationsGLibServiceWrapped,
+        ignis_notifications_glib_service_run_async,
+        ignis_notifications_glib_service_run_finish,
+        run_async,
+    );
 
-        let cancellable = unsafe { gio::Cancellable::from_glib_none(cancellable) };
+    glib_async_method!(
+        IgnisNotificationsGLibService,
+        super::super::IgnisNotificationsGLibServiceWrapped,
+        ignis_notifications_glib_service_close_notification_async,
+        ignis_notifications_glib_service_close_notification_finish,
+        close_notification,
+        notification_id: u32 => { notification_id }
+    );
 
-        let closure =
-            move |task: gio::LocalTask<bool>,
-                  _: Option<&super::super::IgnisNotificationsGLibServiceWrapped>| {
-                let result: *mut gio::ffi::GAsyncResult =
-                    task.upcast_ref::<gio::AsyncResult>().to_glib_none().0;
-
-                if let Some(func) = callback {
-                    unsafe { func(this as *mut _, result, user_data) }
-                }
-            };
-
-        let task = unsafe { gio::LocalTask::new(Some(obj), Some(&cancellable), closure) };
-
-        glib::MainContext::ref_thread_default().spawn_local(async move {
-            let _guard = runtime().enter();
-            let res = imp.run_async().await.map(|_| true);
-            task.return_result(res);
-        });
-    }
-
-    #[unsafe(no_mangle)]
-    pub unsafe extern "C" fn ignis_notifications_glib_service_run_finish(
-        _this: *mut IgnisNotificationsGLibService,
-        res: *mut gio::ffi::GAsyncResult,
-        error: *mut *mut glib::ffi::GError,
-    ) -> bool {
-        let task = unsafe { gio::Task::<bool>::from_glib_none(res as *mut gio::ffi::GTask) };
-
-        return match unsafe { task.propagate() } {
-            Ok(_) => true,
-            Err(e) => {
-                if !error.is_null() {
-                    unsafe { *error = e.into_glib_ptr() };
-                }
-                false
-            }
-        };
-    }
+    glib_async_method!(
+        IgnisNotificationsGLibService,
+        super::super::IgnisNotificationsGLibServiceWrapped,
+        ignis_notifications_glib_service_invoke_action_async,
+        ignis_notifications_glib_service_invoke_action_finish,
+        invoke_action,
+        notification_id: u32 => { notification_id },
+        action_key: *mut glib::ffi::gchar => {
+            let string: String = unsafe { from_glib_none(action_key) };
+            &*string.clone()
+        }
+    );
 
     #[unsafe(no_mangle)]
     pub unsafe extern "C" fn ignis_notifications_glib_service_get_notifications(

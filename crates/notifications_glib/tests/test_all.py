@@ -158,3 +158,29 @@ def test_notification_properties(run_in_glib, notification_service):
         assert latest.props.timeout == latest.get_timeout()
 
     run_in_glib(test())
+
+
+def test_close_notification(run_in_glib, notification_service):
+    id_: int = -1
+    closed_emitted: bool = False
+
+    def on_closed(x, closed_id):
+        nonlocal id_, closed_emitted
+
+        assert id_ == closed_id
+        closed_emitted = True
+
+    async def test():
+        nonlocal id_
+        await send_random_notification()
+
+        notification_service.connect("closed", on_closed)
+
+        latest = notification_service.get_notifications()[-1]
+        id_ = latest.props.id
+
+        await notification_service.close_notification_async(id_)
+
+    run_in_glib(test())
+
+    assert closed_emitted

@@ -36,25 +36,18 @@ cargo_target_dir = meson.project_build_root() / 'cargo'
 
 cargo_build = custom_target(
   'cargo-build',
-  output: LIB_NAME.replace('-', '_'),
+  output: LIB_NAME,
   console: true,
   command: [
     cargo,
     'build',
-    cargo_options,
     '--manifest-path', meson.project_source_root() / 'Cargo.toml',
     '--target-dir', cargo_target_dir,
+    '&&',
+    'cp',
+    cargo_target_dir / cargo_target / LIB_NAME.replace('-', '_'),
+    '@OUTPUT@',
   ],
-)
-
-copy_cargo_build = custom_target(
-  'copy-cargo-build',
-  input: cargo_build,
-  output: LIB_NAME,
-  install: true,
-  install_dir: get_option('libdir'),
-  build_by_default: true,
-  command: ['cp', cargo_target_dir / cargo_target / '@INPUT@', '@OUTPUT@'],
 )
 
 gir_args = []
@@ -71,7 +64,7 @@ gir = custom_target(
   'gir',
   input: HEADERS,
   output: GIR_FILENAME,
-  depends: copy_cargo_build,
+  depends: cargo_build,
   install: true,
   install_dir: get_option('datadir') / 'gir-1.0',
   build_by_default: true,
