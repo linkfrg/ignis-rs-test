@@ -2,7 +2,7 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum NotificationServiceError {
-    #[error("D-Bus error")]
+    #[error("D-Bus error: {0}")]
     DBusError(#[from] zbus::Error),
 
     #[error("Connection not exist error")]
