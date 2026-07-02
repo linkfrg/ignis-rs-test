@@ -86,37 +86,46 @@ impl ObjectImpl for GNotificationServiceImp {
         let obj = self.obj().to_owned();
 
         glib::MainContext::default().spawn_local(async move {
+            let notif_store = &obj.imp().notifications;
+
             while let Some(signal) = obj.imp().rx.borrow_mut().recv().await {
                 match signal {
                     NotificationServiceSignal::Closed { id } => {
-                        for i in 0..obj.imp().notifications.n_items() {
-                            let notification = obj
-                                .imp()
-                                .notifications
-                                .item(i)
-                                .unwrap()
-                                .downcast::<GDesktopNotification>()
-                                .unwrap();
+                        let position = glib_utils::search_in_list_store::<GDesktopNotification, _>(
+                            notif_store,
+                            |n| n.imp().get_id() == id,
+                        );
 
-                            if notification.imp().get_id() == id {
-                                obj.imp().notifications.remove(i);
-                                break;
-                            }
+                        if let Some(position) = position {
+                            notif_store.remove(position);
+
+                            obj.notify("notifications");
+                            obj.emit_by_name_with_values("closed", &[id.to_value()]);
                         }
-
-                        obj.notify("notifications");
-                        obj.emit_by_name_with_values("closed", &[id.to_value()]);
                     }
                     NotificationServiceSignal::Notified {
                         id,
                         notification,
                         replace,
                     } => {
-                        // TODO: implement replace
                         let g_desktop_notification =
                             GDesktopNotification::new_from_rust(notification);
 
-                        obj.imp().notifications.append(&g_desktop_notification);
+                        if !replace {
+                            notif_store.append(&g_desktop_notification);
+                        } else {
+                            let position =
+                                glib_utils::search_in_list_store::<GDesktopNotification, _>(
+                                    notif_store,
+                                    |n| n.imp().get_id() == id,
+                                );
+
+                            if let Some(pos) = position {
+                                notif_store.splice(pos, 1, &[g_desktop_notification]);
+                            } else {
+                                notif_store.append(&g_desktop_notification);
+                            }
+                        }
 
                         obj.notify("notifications");
                         obj.emit_by_name_with_values(
