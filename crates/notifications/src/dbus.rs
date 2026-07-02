@@ -5,14 +5,15 @@ use crate::notification::DesktopNotification;
 use gdk_pixbuf::{Colorspace, Pixbuf};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{Mutex, mpsc};
+use std::sync::RwLock;
+use tokio::sync::mpsc;
 use zbus::fdo;
 use zbus::object_server::SignalEmitter;
 use zbus::{interface, zvariant::OwnedValue};
 use zvariant::{Array, Structure};
 
 pub struct DBusService {
-    data: Arc<Mutex<ServiceData>>,
+    data: Arc<RwLock<ServiceData>>,
     tx: mpsc::Sender<NotificationServiceSignal>,
 }
 
@@ -30,15 +31,12 @@ impl DBusService {
         timeout: i32,
     ) -> u32 {
         let id: u32;
-        let mut data = self.data.lock().await;
-
         let replace = replaces_id != 0;
 
         if replace {
             id = replaces_id;
         } else {
-            data.counter += 1;
-            id = data.counter;
+            id = { self.data.read().unwrap().counter } + 1;
         }
 
         let new_notification = DesktopNotification {
@@ -55,7 +53,13 @@ impl DBusService {
             timeout: timeout,
         };
 
-        data.add_notification(id, new_notification, replace);
+        {
+            let mut data = self.data.write().unwrap();
+            if replace {
+                data.counter += 1;
+            }
+            data.add_notification(id, new_notification, replace);
+        };
 
         let _ = self
             .tx
@@ -79,8 +83,11 @@ impl DBusService {
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) -> fdo::Result<()> {
         emitter.notification_closed(id, 3).await?;
-        let mut data = self.data.lock().await;
-        data.remove_notification(id);
+
+        {
+            let mut data = self.data.write().unwrap();
+            data.remove_notification(id);
+        };
 
         let _ = self.tx.send(NotificationServiceSignal::Closed { id }).await;
 
@@ -108,7 +115,10 @@ impl DBusService {
 }
 
 impl DBusService {
-    pub fn new(data: Arc<Mutex<ServiceData>>, tx: mpsc::Sender<NotificationServiceSignal>) -> Self {
+    pub fn new(
+        data: Arc<RwLock<ServiceData>>,
+        tx: mpsc::Sender<NotificationServiceSignal>,
+    ) -> Self {
         Self { data: data, tx: tx }
     }
     fn save_pixbuf(&self, value: &OwnedValue, notification_id: u32) -> Option<String> {

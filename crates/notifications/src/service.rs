@@ -4,6 +4,7 @@ use crate::dbus::{DBusService, DBusServiceSignals};
 use crate::error::{NotificationServiceError, Result};
 use crate::signals::NotificationServiceSignal;
 use std::sync::Arc;
+use std::sync::RwLock;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 use zbus::Connection;
@@ -11,7 +12,7 @@ use zbus::connection::Builder;
 use zbus::object_server::InterfaceRef;
 
 pub struct NotificationService {
-    data: Arc<Mutex<ServiceData>>,
+    data: Arc<RwLock<ServiceData>>,
     connection: Mutex<Option<Connection>>,
     tx: mpsc::Sender<NotificationServiceSignal>,
 }
@@ -29,7 +30,7 @@ impl NotificationService {
         }
 
         Self {
-            data: Arc::new(Mutex::new(ServiceData::new())),
+            data: Arc::new(RwLock::new(ServiceData::new())),
             connection: Mutex::new(None),
             tx,
         }
@@ -67,7 +68,9 @@ impl NotificationService {
             .notification_closed(id, 2)
             .await?;
 
-        self.data.lock().await.remove_notification(id);
+        {
+            self.data.write().unwrap().remove_notification(id);
+        };
 
         let _ = self.tx.send(NotificationServiceSignal::Closed { id }).await;
 
@@ -83,10 +86,10 @@ impl NotificationService {
         Ok(())
     }
 
-    pub async fn get_notifications(&self) -> Vec<DesktopNotification> {
+    pub fn get_notifications(&self) -> Vec<DesktopNotification> {
         self.data
-            .lock()
-            .await
+            .read()
+            .unwrap()
             .notifications
             .values()
             .cloned()
@@ -94,7 +97,7 @@ impl NotificationService {
     }
 
     pub async fn get_notification_by_id(&self, id: u32) -> Option<DesktopNotification> {
-        self.data.lock().await.notifications.get(&id).cloned()
+        self.data.write().unwrap().notifications.get(&id).cloned()
     }
 }
 
