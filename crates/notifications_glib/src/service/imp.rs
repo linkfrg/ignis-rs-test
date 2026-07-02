@@ -22,9 +22,20 @@ impl Default for GNotificationServiceImp {
         let (tx, rx) = mpsc::channel::<NotificationServiceSignal>(32);
 
         let _guard = runtime().enter();
+        let service = notifications::NotificationService::new(Some(tx));
+
+        let notifications = gio::ListStore::new::<GDesktopNotification>();
+        let initial_notifications = service.get_notifications();
+
+        for n in initial_notifications {
+            let obj = GDesktopNotification::new_from_rust(n);
+
+            notifications.append(&obj);
+        }
+
         Self {
-            service: notifications::NotificationService::new(Some(tx)),
-            notifications: gio::ListStore::new::<GDesktopNotification>(),
+            service,
+            notifications,
             rx: RefCell::new(rx),
         }
     }
@@ -121,22 +132,11 @@ impl ObjectImpl for GNotificationServiceImp {
 }
 
 impl GNotificationServiceImp {
-    async fn populate_lists(&self) {
-        let initial_notifications = self.service.get_notifications().await;
-
-        for n in initial_notifications {
-            let obj = GDesktopNotification::new_from_rust(n);
-
-            self.notifications.append(&obj);
-        }
-    }
     pub async fn run_async(&self) -> Result<(), glib::Error> {
         self.service
             .run()
             .await
             .into_glib_error::<GNotificationServiceError>()?;
-
-        self.populate_lists().await;
 
         Ok(())
     }
