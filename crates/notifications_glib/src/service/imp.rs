@@ -107,16 +107,16 @@ impl ObjectImpl for GNotificationServiceImp {
                         obj.notify("notifications");
                         obj.emit_by_name_with_values("closed", &[id.to_value()]);
                     }
-                    NotificationServiceSignal::Notified { id, replace } => {
+                    NotificationServiceSignal::Notified {
+                        id,
+                        notification,
+                        replace,
+                    } => {
                         // TODO: implement replace
-                        // TODO: Send DesktopNotification object in this signal
-                        let notification = obj.imp().service.get_notification_by_id(id);
-                        if let Some(notification) = notification {
-                            let g_desktop_notification =
-                                GDesktopNotification::new_from_rust(notification);
+                        let g_desktop_notification =
+                            GDesktopNotification::new_from_rust(notification);
 
-                            obj.imp().notifications.append(&g_desktop_notification);
-                        }
+                        obj.imp().notifications.append(&g_desktop_notification);
 
                         obj.notify("notifications");
                         obj.emit_by_name_with_values(

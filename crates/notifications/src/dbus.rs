@@ -58,12 +58,16 @@ impl DBusService {
             if replace {
                 data.counter += 1;
             }
-            data.add_notification(id, new_notification, replace);
+            data.add_notification(id, new_notification.clone(), replace);
         };
 
         let _ = self
             .tx
-            .send(NotificationServiceSignal::Notified { id, replace })
+            .send(NotificationServiceSignal::Notified {
+                id,
+                notification: new_notification,
+                replace,
+            })
             .await;
 
         return id;
