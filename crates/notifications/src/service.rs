@@ -96,8 +96,8 @@ impl NotificationService {
             .collect()
     }
 
-    pub async fn get_notification_by_id(&self, id: u32) -> Option<DesktopNotification> {
-        self.data.write().unwrap().notifications.get(&id).cloned()
+    pub fn get_notification_by_id(&self, id: u32) -> Option<DesktopNotification> {
+        self.data.read().unwrap().notifications.get(&id).cloned()
     }
 }
 
