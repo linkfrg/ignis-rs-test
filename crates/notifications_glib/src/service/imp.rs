@@ -6,6 +6,7 @@ use glib::subclass::{Signal, prelude::*};
 use glib::translate::*;
 use glib_utils::{IntoGLibError, glib_async_method};
 use notifications::NotificationServiceSignal;
+use std::cell::RefCell;
 use std::sync::OnceLock;
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
@@ -13,13 +14,18 @@ use tokio::sync::mpsc;
 pub struct GNotificationServiceImp {
     pub service: notifications::NotificationService,
     pub notifications: gio::ListStore,
+    rx: RefCell<mpsc::Receiver<NotificationServiceSignal>>,
 }
 
 impl Default for GNotificationServiceImp {
     fn default() -> Self {
+        let (tx, rx) = mpsc::channel::<NotificationServiceSignal>(32);
+
+        let _guard = runtime().enter();
         Self {
-            service: notifications::NotificationService::default(),
+            service: notifications::NotificationService::new(Some(tx)),
             notifications: gio::ListStore::new::<GDesktopNotification>(),
+            rx: RefCell::new(rx),
         }
     }
 }
@@ -63,32 +69,14 @@ impl ObjectImpl for GNotificationServiceImp {
             _ => unimplemented!(),
         }
     }
-}
 
-impl GNotificationServiceImp {
-    async fn populate_lists(&self) {
-        let initial_notifications = self.service.get_notifications().await;
-
-        for n in initial_notifications {
-            let obj = GDesktopNotification::new_from_rust(n);
-
-            self.notifications.append(&obj);
-        }
-    }
-    pub async fn run_async(&self) -> Result<(), glib::Error> {
-        let (tx, mut rx) = mpsc::channel::<NotificationServiceSignal>(32);
-
-        self.service
-            .run(Some(tx))
-            .await
-            .into_glib_error::<GNotificationServiceError>()?;
-
-        self.populate_lists().await;
+    fn constructed(&self) {
+        self.parent_constructed();
 
         let obj = self.obj().to_owned();
 
         glib::MainContext::default().spawn_local(async move {
-            while let Some(signal) = rx.recv().await {
+            while let Some(signal) = obj.imp().rx.borrow_mut().recv().await {
                 match signal {
                     NotificationServiceSignal::Closed { id } => {
                         for i in 0..obj.imp().notifications.n_items() {
@@ -129,6 +117,26 @@ impl GNotificationServiceImp {
                 }
             }
         });
+    }
+}
+
+impl GNotificationServiceImp {
+    async fn populate_lists(&self) {
+        let initial_notifications = self.service.get_notifications().await;
+
+        for n in initial_notifications {
+            let obj = GDesktopNotification::new_from_rust(n);
+
+            self.notifications.append(&obj);
+        }
+    }
+    pub async fn run_async(&self) -> Result<(), glib::Error> {
+        self.service
+            .run()
+            .await
+            .into_glib_error::<GNotificationServiceError>()?;
+
+        self.populate_lists().await;
 
         Ok(())
     }
@@ -164,6 +172,7 @@ impl GNotificationServiceImp {
     }
 }
 
+// FIXME: move it to glib_utils
 fn runtime() -> &'static Runtime {
     static RUNTIME: OnceLock<Runtime> = OnceLock::new();
     RUNTIME.get_or_init(|| Runtime::new().expect("Setting up tokio runtime needs to succeed."))
