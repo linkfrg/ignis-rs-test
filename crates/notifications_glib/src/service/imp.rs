@@ -4,11 +4,10 @@ use gio::prelude::ListModelExt;
 use glib::prelude::*;
 use glib::subclass::{Signal, prelude::*};
 use glib::translate::*;
-use glib_utils::{IntoGLibError, glib_async_method};
+use glib_utils::{IntoGLibError, glib_async_method, runtime};
 use notifications::NotificationServiceSignal;
 use std::cell::RefCell;
 use std::sync::OnceLock;
-use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 
 pub struct GNotificationServiceImp {
@@ -111,7 +110,7 @@ impl ObjectImpl for GNotificationServiceImp {
                     NotificationServiceSignal::Notified { id, replace } => {
                         // TODO: implement replace
                         // TODO: Send DesktopNotification object in this signal
-                        let notification = obj.imp().service.get_notification_by_id(id).await;
+                        let notification = obj.imp().service.get_notification_by_id(id);
                         if let Some(notification) = notification {
                             let g_desktop_notification =
                                 GDesktopNotification::new_from_rust(notification);
@@ -170,12 +169,6 @@ impl GNotificationServiceImp {
             .await
             .into_glib_error::<GNotificationServiceError>()
     }
-}
-
-// FIXME: move it to glib_utils
-fn runtime() -> &'static Runtime {
-    static RUNTIME: OnceLock<Runtime> = OnceLock::new();
-    RUNTIME.get_or_init(|| Runtime::new().expect("Setting up tokio runtime needs to succeed."))
 }
 
 pub(crate) mod ffi {
