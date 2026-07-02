@@ -184,3 +184,9 @@ def test_close_notification(run_in_glib, notification_service):
     run_in_glib(test())
 
     assert closed_emitted
+
+
+def test_sorted(notification_service):
+    notifications = notification_service.get_notifications()
+    is_sorted = notifications == sorted(notifications, key=lambda x: x.get_id())
+    assert is_sorted

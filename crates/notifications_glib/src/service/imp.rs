@@ -1,20 +1,27 @@
 use crate::error::GNotificationServiceError;
 use crate::notification::GDesktopNotification;
+use gio::prelude::ListModelExt;
 use glib::prelude::*;
 use glib::subclass::{Signal, prelude::*};
 use glib::translate::*;
 use glib_utils::{IntoGLibError, glib_async_method};
 use notifications::NotificationServiceSignal;
-use std::cell::RefCell;
-use std::collections::BTreeMap;
 use std::sync::OnceLock;
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 
-#[derive(Default)]
 pub struct GNotificationServiceImp {
     pub service: notifications::NotificationService,
-    pub notifications: RefCell<BTreeMap<u32, GDesktopNotification>>,
+    pub notifications: gio::ListStore,
+}
+
+impl Default for GNotificationServiceImp {
+    fn default() -> Self {
+        Self {
+            service: notifications::NotificationService::default(),
+            notifications: gio::ListStore::new::<GDesktopNotification>(),
+        }
+    }
 }
 
 #[glib::object_subclass]
@@ -22,16 +29,6 @@ impl ObjectSubclass for GNotificationServiceImp {
     const NAME: &'static str = "IgnisNotificationsGLibService";
     type Type = super::GNotificationService;
     type ParentType = glib::Object;
-}
-
-fn vec_to_list_store(vec: Vec<GDesktopNotification>) -> gio::ListStore {
-    let store = gio::ListStore::new::<GDesktopNotification>();
-
-    for notification in vec {
-        store.append(&notification);
-    }
-
-    store
 }
 
 impl ObjectImpl for GNotificationServiceImp {
@@ -62,13 +59,22 @@ impl ObjectImpl for GNotificationServiceImp {
 
     fn property(&self, _id: usize, _pspec: &glib::ParamSpec) -> glib::Value {
         match _pspec.name() {
-            "notifications" => vec_to_list_store(self.get_notifications()).to_value(),
+            "notifications" => self.notifications.to_value(),
             _ => unimplemented!(),
         }
     }
 }
 
 impl GNotificationServiceImp {
+    async fn populate_lists(&self) {
+        let initial_notifications = self.service.get_notifications().await;
+
+        for n in initial_notifications {
+            let obj = GDesktopNotification::new_from_rust(n);
+
+            self.notifications.append(&obj);
+        }
+    }
     pub async fn run_async(&self) -> Result<(), glib::Error> {
         let (tx, mut rx) = mpsc::channel::<NotificationServiceSignal>(32);
 
@@ -77,13 +83,7 @@ impl GNotificationServiceImp {
             .await
             .into_glib_error::<GNotificationServiceError>()?;
 
-        *self.notifications.borrow_mut() = self
-            .service
-            .get_notifications()
-            .await
-            .into_iter()
-            .map(|n| (n.id, GDesktopNotification::new_from_rust(n)))
-            .collect();
+        self.populate_lists().await;
 
         let obj = self.obj().to_owned();
 
@@ -91,18 +91,33 @@ impl GNotificationServiceImp {
             while let Some(signal) = rx.recv().await {
                 match signal {
                     NotificationServiceSignal::Closed { id } => {
-                        obj.imp().notifications.borrow_mut().remove(&id);
+                        for i in 0..obj.imp().notifications.n_items() {
+                            let notification = obj
+                                .imp()
+                                .notifications
+                                .item(i)
+                                .unwrap()
+                                .downcast::<GDesktopNotification>()
+                                .unwrap();
+
+                            if notification.imp().get_id() == id {
+                                obj.imp().notifications.remove(i);
+                                break;
+                            }
+                        }
+
                         obj.notify("notifications");
                         obj.emit_by_name_with_values("closed", &[id.to_value()]);
                     }
                     NotificationServiceSignal::Notified { id, replace } => {
                         // TODO: implement replace
+                        // TODO: Send DesktopNotification object in this signal
                         let notification = obj.imp().service.get_notification_by_id(id).await;
                         if let Some(notification) = notification {
-                            obj.imp()
-                                .notifications
-                                .borrow_mut()
-                                .insert(id, GDesktopNotification::new_from_rust(notification));
+                            let g_desktop_notification =
+                                GDesktopNotification::new_from_rust(notification);
+
+                            obj.imp().notifications.append(&g_desktop_notification);
                         }
 
                         obj.notify("notifications");
@@ -119,7 +134,15 @@ impl GNotificationServiceImp {
     }
 
     pub fn get_notifications(&self) -> Vec<GDesktopNotification> {
-        self.notifications.borrow().values().cloned().collect()
+        (0..self.notifications.n_items())
+            .map(|i| {
+                self.notifications
+                    .item(i)
+                    .unwrap()
+                    .downcast::<GDesktopNotification>()
+                    .unwrap()
+            })
+            .collect()
     }
 
     pub async fn close_notification(&self, notification_id: u32) -> Result<(), glib::Error> {
