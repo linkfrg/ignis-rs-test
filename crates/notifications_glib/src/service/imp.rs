@@ -91,18 +91,8 @@ impl ObjectImpl for GNotificationServiceImp {
 
             while let Some(signal) = obj.imp().rx.borrow_mut().recv().await {
                 match signal {
-                    NotificationServiceSignal::Closed { id } => {
-                        let position = glib_utils::search_in_list_store::<GDesktopNotification, _>(
-                            notif_store,
-                            |n| n.imp().get_id() == id,
-                        );
-
-                        if let Some(position) = position {
-                            notif_store.remove(position);
-
-                            obj.notify("notifications");
-                            obj.emit_by_name_with_values("closed", &[id.to_value()]);
-                        }
+                    NotificationServiceSignal::CloseNotification { id } => {
+                        obj.imp().close_notification_internal(id)
                     }
                     NotificationServiceSignal::Notified {
                         id,
@@ -141,6 +131,22 @@ impl ObjectImpl for GNotificationServiceImp {
 }
 
 impl GNotificationServiceImp {
+    fn close_notification_internal(&self, id: u32) {
+        let notif_store = &self.notifications;
+
+        let position =
+            glib_utils::search_in_list_store::<GDesktopNotification, _>(notif_store, |n| {
+                n.imp().get_id() == id
+            });
+
+        if let Some(position) = position {
+            notif_store.remove(position);
+
+            self.obj().notify("notifications");
+            self.obj()
+                .emit_by_name_with_values("closed", &[id.to_value()]);
+        }
+    }
     pub async fn run_async(&self) -> Result<(), glib::Error> {
         self.service
             .run()
@@ -166,9 +172,11 @@ impl GNotificationServiceImp {
         self.service
             .close_notification(notification_id)
             .await
-            .into_glib_error::<GNotificationServiceError>()
-        // TODO: I think it's better to remove the notification manually here
-        // Rather than rely on signals
+            .into_glib_error::<GNotificationServiceError>()?;
+
+        self.close_notification_internal(notification_id);
+
+        Ok(())
     }
 
     pub async fn invoke_action(

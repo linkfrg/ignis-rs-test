@@ -93,7 +93,10 @@ impl DBusService {
             data.remove_notification(id);
         };
 
-        let _ = self.tx.send(NotificationServiceSignal::Closed { id }).await;
+        let _ = self
+            .tx
+            .send(NotificationServiceSignal::CloseNotification { id })
+            .await;
 
         Ok(())
     }

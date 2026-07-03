@@ -68,11 +68,7 @@ impl NotificationService {
             .notification_closed(id, 2)
             .await?;
 
-        {
-            self.data.write().unwrap().remove_notification(id);
-        };
-
-        let _ = self.tx.send(NotificationServiceSignal::Closed { id }).await;
+        self.data.write().unwrap().remove_notification(id);
 
         Ok(())
     }
