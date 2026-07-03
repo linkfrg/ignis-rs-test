@@ -51,6 +51,12 @@ impl ServiceData {
         self.save_to_file();
     }
 
+    pub fn clear(&mut self) {
+        self.notifications.clear();
+        self.counter = 0;
+        self.save_to_file();
+    }
+
     fn save_to_file(&self) {
         let res = serde_json::to_string_pretty(self)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))

@@ -58,6 +58,7 @@ impl ObjectImpl for GNotificationServiceImp {
                 Signal::builder("closed")
                     .param_types([u32::static_type()])
                     .build(),
+                Signal::builder("notifications-cleared").build(),
             ]
         })
     }
@@ -166,6 +167,8 @@ impl GNotificationServiceImp {
             .close_notification(notification_id)
             .await
             .into_glib_error::<GNotificationServiceError>()
+        // TODO: I think it's better to remove the notification manually here
+        // Rather than rely on signals
     }
 
     pub async fn invoke_action(
@@ -177,6 +180,15 @@ impl GNotificationServiceImp {
             .invoke_action(notification_id, action_key)
             .await
             .into_glib_error::<GNotificationServiceError>()
+    }
+
+    pub fn clear_notifications(&self) {
+        // NOTE: it doesn't emit closed for each notification as it was before
+        // Users should manually clear their notification list widget contents
+        self.service.clear_notifications();
+        self.notifications.remove_all();
+        self.obj()
+            .emit_by_name_with_values("notifications-cleared", &[]);
     }
 }
 
@@ -236,5 +248,13 @@ pub(crate) mod ffi {
     ) -> *mut glib::ffi::GList {
         let imp = unsafe { (*this).imp() };
         imp.get_notifications().to_glib_full()
+    }
+
+    #[unsafe(no_mangle)]
+    pub unsafe extern "C" fn ignis_notifications_glib_service_clear_notifications(
+        this: *mut IgnisNotificationsGLibService,
+    ) {
+        let imp = unsafe { (*this).imp() };
+        imp.clear_notifications();
     }
 }

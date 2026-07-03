@@ -99,6 +99,10 @@ impl NotificationService {
     pub fn get_notification_by_id(&self, id: u32) -> Option<DesktopNotification> {
         self.data.read().unwrap().notifications.get(&id).cloned()
     }
+
+    pub fn clear_notifications(&self) {
+        self.data.write().unwrap().clear();
+    }
 }
 
 impl Default for NotificationService {

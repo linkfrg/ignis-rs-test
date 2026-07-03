@@ -190,3 +190,25 @@ def test_sorted(notification_service):
     notifications = notification_service.get_notifications()
     is_sorted = notifications == sorted(notifications, key=lambda x: x.get_id())
     assert is_sorted
+
+
+def test_clear_notifications(run_in_glib, notification_service):
+    notifications_cleared_emitted: bool = False
+
+    def on_clear_all(_):
+        nonlocal notifications_cleared_emitted
+        notifications_cleared_emitted = True
+
+    async def test():
+        for _ in range(10):
+            await send_random_notification()
+
+        notification_service.connect("notifications-cleared", on_clear_all)
+        notification_service.clear_notifications()
+
+        assert len(notification_service.props.notifications) == 0
+        assert len(notification_service.get_notifications()) == 0
+
+    run_in_glib(test())
+
+    assert notifications_cleared_emitted
