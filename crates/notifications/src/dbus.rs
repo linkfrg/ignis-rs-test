@@ -14,7 +14,7 @@ use zvariant::{Array, Structure};
 
 pub struct DBusService {
     data: Arc<RwLock<ServiceData>>,
-    tx: mpsc::Sender<NotificationServiceSignal>,
+    outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>,
 }
 
 #[interface(name = "org.freedesktop.Notifications")]
@@ -61,14 +61,15 @@ impl DBusService {
             data.add_notification(id, new_notification.clone(), replace);
         };
 
-        let _ = self
-            .tx
-            .send(NotificationServiceSignal::Notified {
-                id,
-                notification: new_notification,
-                replace,
-            })
-            .await;
+        if let Some(tx) = self.outer_tx.clone() {
+            let _ = tx
+                .send(NotificationServiceSignal::Notified {
+                    id,
+                    notification: new_notification,
+                    replace,
+                })
+                .await;
+        }
 
         return id;
     }
@@ -93,10 +94,11 @@ impl DBusService {
             data.remove_notification(id);
         };
 
-        let _ = self
-            .tx
-            .send(NotificationServiceSignal::CloseNotification { id })
-            .await;
+        if let Some(tx) = self.outer_tx.clone() {
+            let _ = tx
+                .send(NotificationServiceSignal::CloseNotification { id })
+                .await;
+        }
 
         Ok(())
     }
@@ -124,9 +126,9 @@ impl DBusService {
 impl DBusService {
     pub fn new(
         data: Arc<RwLock<ServiceData>>,
-        tx: mpsc::Sender<NotificationServiceSignal>,
+        outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>,
     ) -> Self {
-        Self { data: data, tx: tx }
+        Self { data, outer_tx }
     }
     fn save_pixbuf(&self, value: &OwnedValue, notification_id: u32) -> Option<String> {
         let s = value.downcast_ref::<Structure>().ok()?;

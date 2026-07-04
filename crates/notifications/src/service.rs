@@ -14,30 +14,20 @@ use zbus::object_server::InterfaceRef;
 pub struct NotificationService {
     data: Arc<RwLock<ServiceData>>,
     connection: Mutex<Option<Connection>>,
-    tx: mpsc::Sender<NotificationServiceSignal>,
+    outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>,
 }
 
 impl NotificationService {
     pub fn new(outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>) -> Self {
-        let (tx, mut rx) = mpsc::channel(32);
-
-        if let Some(outer_tx) = outer_tx {
-            tokio::spawn(async move {
-                while let Some(signal) = rx.recv().await {
-                    let _ = outer_tx.send(signal).await;
-                }
-            });
-        }
-
         Self {
             data: Arc::new(RwLock::new(ServiceData::new())),
             connection: Mutex::new(None),
-            tx,
+            outer_tx,
         }
     }
 
     pub async fn run(&self) -> Result<()> {
-        let service = DBusService::new(Arc::clone(&self.data), self.tx.clone());
+        let service = DBusService::new(Arc::clone(&self.data), self.outer_tx.clone());
 
         let connection = Builder::session()?
             .name("org.freedesktop.Notifications")?
