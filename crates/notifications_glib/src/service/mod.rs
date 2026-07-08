@@ -8,6 +8,12 @@ glib::wrapper! {
     pub struct GNotificationService(ObjectSubclass<imp::GNotificationServiceImp>);
 }
 
+impl Default for GNotificationService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GNotificationService {
     pub fn new() -> Self {
         Object::builder().build()

@@ -23,6 +23,7 @@ pub struct DBusService {
 
 #[interface(name = "org.freedesktop.Notifications")]
 impl DBusService {
+    #[allow(clippy::too_many_arguments)]
     async fn notify(
         &self,
         app_name: &str,
@@ -34,27 +35,26 @@ impl DBusService {
         hints: HashMap<String, OwnedValue>,
         timeout: i32,
     ) -> u32 {
-        let id: u32;
         let replace = replaces_id != 0;
 
-        if replace {
-            id = replaces_id;
+        let id: u32 = if replace {
+            replaces_id
         } else {
-            id = { self.data.read().unwrap().counter } + 1;
-        }
+            self.data.read().unwrap().counter + 1
+        };
 
         let new_notification = DesktopNotification {
-            id: id,
+            id,
             app_name: app_name.to_string(),
             icon: self.get_icon(app_icon, &hints, id),
             summary: summary.to_string(),
             body: body.to_string(),
-            actions: actions,
+            actions,
             urgency: hints
                 .get("urgency")
                 .and_then(|v| v.downcast_ref::<u8>().ok())
                 .unwrap_or(0),
-            timeout: timeout,
+            timeout,
         };
 
         {
@@ -68,20 +68,19 @@ impl DBusService {
             }
         };
 
-        if let Some(tx) = self.outer_tx.clone() {
-            if let Err(e) = tx
+        if let Some(tx) = self.outer_tx.clone()
+            && let Err(e) = tx
                 .send(NotificationServiceSignal::Notified {
                     id,
                     notification: new_notification,
                     replace,
                 })
                 .await
-            {
-                error!("Failed to send Notified: {e}");
-            }
+        {
+            error!("Failed to send Notified: {e}");
         }
 
-        return id;
+        id
     }
 
     async fn get_server_information(&self) -> (&str, &str, &str, &str) {
@@ -107,13 +106,12 @@ impl DBusService {
             }
         };
 
-        if let Some(tx) = self.outer_tx.clone() {
-            if let Err(e) = tx
+        if let Some(tx) = self.outer_tx.clone()
+            && let Err(e) = tx
                 .send(NotificationServiceSignal::CloseNotification { id })
                 .await
-            {
-                error!("Failed to send CloseNotification: {e}");
-            }
+        {
+            error!("Failed to send CloseNotification: {e}");
         }
 
         Ok(())
@@ -155,7 +153,7 @@ impl DBusService {
         let s = value.downcast_ref::<Structure>().ok()?;
         let fields = s.fields();
 
-        let width = fields.get(0)?.downcast_ref::<i32>().ok()?;
+        let width = fields.first()?.downcast_ref::<i32>().ok()?;
         let height = fields.get(1)?.downcast_ref::<i32>().ok()?;
         let rowstride = fields.get(2)?.downcast_ref::<i32>().ok()?;
         let has_alpha = fields.get(3)?.downcast_ref::<bool>().ok()?;
@@ -204,6 +202,6 @@ impl DBusService {
             return self.save_pixbuf(value, notification_id);
         }
 
-        return Some(app_icon.to_string());
+        Some(app_icon.to_string())
     }
 }

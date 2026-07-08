@@ -6,14 +6,13 @@ use glib::subclass::{Signal, prelude::*};
 use glib::translate::*;
 use glib_utils::{IntoGLibError, glib_async_method, runtime};
 use notifications::NotificationServiceSignal;
-use std::cell::RefCell;
 use std::sync::OnceLock;
-use tokio::sync::mpsc;
+use tokio::sync::{Mutex, mpsc};
 
 pub struct GNotificationServiceImp {
     pub service: notifications::NotificationService,
     pub notifications: gio::ListStore,
-    rx: RefCell<mpsc::Receiver<NotificationServiceSignal>>,
+    rx: Mutex<mpsc::Receiver<NotificationServiceSignal>>,
 }
 
 impl Default for GNotificationServiceImp {
@@ -42,7 +41,7 @@ impl Default for GNotificationServiceImp {
         Self {
             service,
             notifications,
-            rx: RefCell::new(rx),
+            rx: Mutex::new(rx),
         }
     }
 }
@@ -96,7 +95,7 @@ impl ObjectImpl for GNotificationServiceImp {
         glib::MainContext::default().spawn_local(async move {
             let notif_store = &obj.imp().notifications;
 
-            while let Some(signal) = obj.imp().rx.borrow_mut().recv().await {
+            while let Some(signal) = obj.imp().rx.lock().await.recv().await {
                 match signal {
                     NotificationServiceSignal::CloseNotification { id } => {
                         obj.imp().close_notification_internal(id)

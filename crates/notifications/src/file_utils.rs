@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 pub(crate) fn get_service_cache_dir(xdg_cache_dir: Option<PathBuf>) -> Result<PathBuf> {
     let dir = xdg_cache_dir
-        .unwrap_or_else(|| glib::user_cache_dir())
+        .unwrap_or_else(glib::user_cache_dir)
         .join("ignis_notifications");
 
     fs::create_dir_all(&dir)?;
