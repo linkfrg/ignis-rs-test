@@ -21,7 +21,14 @@ impl Default for GNotificationServiceImp {
         let (tx, rx) = mpsc::channel::<NotificationServiceSignal>(32);
 
         let _guard = runtime().enter();
-        let service = notifications::NotificationService::new(Some(tx));
+        let service = notifications::NotificationService::new(Some(tx.clone()), None)
+            .unwrap_or_else(|e| {
+                glib::g_error!(
+                    "ignis-notifications-glib",
+                    "Failed to initialize Rust Service! Falling back, file I/O is disabled: {e}"
+                );
+                notifications::NotificationService::new_in_memory(Some(tx))
+            });
 
         let notifications = gio::ListStore::new::<GDesktopNotification>();
         let initial_notifications = service.get_notifications();
@@ -190,13 +197,16 @@ impl GNotificationServiceImp {
             .into_glib_error::<GNotificationServiceError>()
     }
 
-    pub fn clear_notifications(&self) {
+    pub fn clear_notifications(&self) -> Result<(), glib::Error> {
         // NOTE: it doesn't emit closed for each notification as it was before
         // Users should manually clear their notification list widget contents
-        self.service.clear_notifications();
+        self.service
+            .clear_notifications()
+            .into_glib_error::<GNotificationServiceError>()?;
         self.notifications.remove_all();
         self.obj()
             .emit_by_name_with_values("notifications-cleared", &[]);
+        Ok(())
     }
 }
 
@@ -261,8 +271,17 @@ pub(crate) mod ffi {
     #[unsafe(no_mangle)]
     pub unsafe extern "C" fn ignis_notifications_glib_service_clear_notifications(
         this: *mut IgnisNotificationsGLibService,
-    ) {
+        error: *mut *mut glib::ffi::GError,
+    ) -> glib::ffi::gboolean {
         let imp = unsafe { (*this).imp() };
-        imp.clear_notifications();
+        match imp.clear_notifications() {
+            Ok(()) => glib::ffi::GTRUE,
+            Err(e) => {
+                if !error.is_null() {
+                    unsafe { *error = e.into_glib_ptr() }
+                }
+                glib::ffi::GFALSE
+            }
+        }
     }
 }

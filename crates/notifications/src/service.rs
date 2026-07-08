@@ -3,6 +3,7 @@ use crate::data::ServiceData;
 use crate::dbus::{DBusService, DBusServiceSignals};
 use crate::error::{NotificationServiceError, Result};
 use crate::signals::NotificationServiceSignal;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 use tokio::sync::Mutex;
@@ -15,19 +16,37 @@ pub struct NotificationService {
     data: Arc<RwLock<ServiceData>>,
     connection: Mutex<Option<Connection>>,
     outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>,
+    cache_dir: Option<PathBuf>,
 }
 
 impl NotificationService {
-    pub fn new(outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>) -> Self {
-        Self {
-            data: Arc::new(RwLock::new(ServiceData::new())),
+    pub fn new(
+        outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>,
+        cache_dir: Option<PathBuf>,
+    ) -> Result<Self> {
+        Ok(Self {
+            data: Arc::new(RwLock::new(ServiceData::new(cache_dir.clone())?)),
             connection: Mutex::new(None),
             outer_tx,
+            cache_dir,
+        })
+    }
+
+    pub fn new_in_memory(outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>) -> Self {
+        Self {
+            data: Arc::new(RwLock::new(ServiceData::new_in_memory())),
+            connection: Mutex::new(None),
+            outer_tx,
+            cache_dir: None,
         }
     }
 
     pub async fn run(&self) -> Result<()> {
-        let service = DBusService::new(Arc::clone(&self.data), self.outer_tx.clone());
+        let service = DBusService::new(
+            Arc::clone(&self.data),
+            self.outer_tx.clone(),
+            self.cache_dir.clone(),
+        )?;
 
         let connection = Builder::session()?
             .name("org.freedesktop.Notifications")?
@@ -58,7 +77,7 @@ impl NotificationService {
             .notification_closed(id, 2)
             .await?;
 
-        self.data.write().unwrap().remove_notification(id);
+        self.data.write().unwrap().remove_notification(id)?;
 
         Ok(())
     }
@@ -86,14 +105,8 @@ impl NotificationService {
         self.data.read().unwrap().notifications.get(&id).cloned()
     }
 
-    pub fn clear_notifications(&self) {
-        self.data.write().unwrap().clear();
-    }
-}
-
-impl Default for NotificationService {
-    fn default() -> Self {
-        Self::new(None)
+    pub fn clear_notifications(&self) -> Result<()> {
+        self.data.write().unwrap().clear()
     }
 }
 
@@ -102,28 +115,92 @@ impl Default for NotificationService {
 mod tests {
     use super::*;
 
-    use tokio::process::Command;
+    use fake::Fake;
+    use fake::faker::lorem::en::Sentence;
+    use notify_rust::{Notification, NotificationHandle, Urgency};
+    use rand::seq::IndexedRandom;
+    use tempfile::TempDir;
+
+    async fn send_random_notification() -> NotificationHandle {
+        let mut rng = rand::rng();
+
+        let summary: String = Sentence(3..6).fake();
+        let body: String = Sentence(6..12).fake();
+        let app_name: String = Sentence(1..3).fake();
+        let icon: String = String::from("cat-sleeping-symbolic");
+
+        // Urgency levels
+        // 0 - Low
+        // 1 - Normal
+        // 2 - Critical
+        let urgency_levels = [Urgency::Low, Urgency::Normal, Urgency::Critical];
+        let urgency: Urgency = urgency_levels.choose(&mut rng).unwrap().to_owned();
+
+        // If -1 - expiration time is dependent on the server's settings
+        // If 0 - never expire
+        // >0 - timeout time in milliseconds
+
+        let timeouts = [-1, 0, 500, 1000];
+        let timeout: i32 = timeouts.choose(&mut rng).unwrap().to_owned();
+
+        Notification::new()
+            .appname(&app_name)
+            .summary(&summary)
+            .body(&body)
+            .icon(&icon)
+            .timeout(timeout)
+            .urgency(urgency)
+            .show()
+            .unwrap()
+    }
+
+    async fn run_service() -> NotificationService {
+        let service = NotificationService::new(None, None).unwrap();
+        service.run().await.unwrap();
+
+        service
+    }
 
     #[tokio::test]
     async fn test_notification() {
-        let summary = "test summary 1";
-        let body = "test body 1";
+        let service = run_service().await;
+        let test_notification = send_random_notification().await;
 
-        let service = NotificationService::default();
-        service.run().await.unwrap();
-        println!("After service run");
+        let notification = service
+            .get_notification_by_id(test_notification.id())
+            .unwrap();
 
-        let output = Command::new("notify-send")
-            .arg(summary)
-            .arg(body)
-            .output()
-            .await
-            .expect("failed to execute notify-send");
-
-        assert!(
-            output.status.success(),
-            "notify-send failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        assert_eq!(test_notification.appname, notification.app_name);
+        // TODO: check icon in the separate test
+        assert_eq!(test_notification.icon, notification.icon.unwrap());
+        assert_eq!(test_notification.summary, notification.summary);
+        assert_eq!(test_notification.body, notification.body);
+        // assert_eq!(test_notification.urgency, notification.urgency);
+        assert_eq!(i32::from(test_notification.timeout), notification.timeout);
     }
+
+    #[tokio::test]
+    async fn test_get_notification() {
+        let service = run_service().await;
+        let handle = send_random_notification().await;
+
+        assert!(service.get_notifications().is_sorted_by_key(|x| x.id));
+        assert!(service.get_notification_by_id(handle.id()).is_some());
+        assert_eq!(service.get_notifications().last().unwrap().id, handle.id());
+    }
+
+    #[tokio::test]
+    async fn test_close_notification() {}
+
+    #[tokio::test]
+    async fn test_invoke_action() {}
+
+    #[tokio::test]
+    async fn test_clear_notifications() {}
+
+    #[tokio::test]
+    async fn test_image_data() {}
+
+    #[tokio::test]
+    async fn test_timeout() {}
 }

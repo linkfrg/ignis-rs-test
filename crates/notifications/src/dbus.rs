@@ -1,12 +1,15 @@
 use crate::NotificationServiceSignal;
-use crate::constants::IMAGE_DIR;
+use crate::Result;
 use crate::data::ServiceData;
+use crate::file_utils::get_image_dir;
 use crate::notification::DesktopNotification;
 use gdk_pixbuf::{Colorspace, Pixbuf};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 use tokio::sync::mpsc;
+use tracing::error;
 use zbus::fdo;
 use zbus::object_server::SignalEmitter;
 use zbus::{interface, zvariant::OwnedValue};
@@ -15,6 +18,7 @@ use zvariant::{Array, Structure};
 pub struct DBusService {
     data: Arc<RwLock<ServiceData>>,
     outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>,
+    image_dir: PathBuf,
 }
 
 #[interface(name = "org.freedesktop.Notifications")]
@@ -58,17 +62,23 @@ impl DBusService {
             if replace {
                 data.counter += 1;
             }
-            data.add_notification(id, new_notification.clone(), replace);
+
+            if let Err(e) = data.add_notification(id, new_notification.clone(), replace) {
+                error!("Failed to add notification: {e}");
+            }
         };
 
         if let Some(tx) = self.outer_tx.clone() {
-            let _ = tx
+            if let Err(e) = tx
                 .send(NotificationServiceSignal::Notified {
                     id,
                     notification: new_notification,
                     replace,
                 })
-                .await;
+                .await
+            {
+                error!("Failed to send Notified: {e}");
+            }
         }
 
         return id;
@@ -91,13 +101,19 @@ impl DBusService {
 
         {
             let mut data = self.data.write().unwrap();
-            data.remove_notification(id);
+
+            if let Err(e) = data.remove_notification(id) {
+                error!("Can not remove notification: {e}");
+            }
         };
 
         if let Some(tx) = self.outer_tx.clone() {
-            let _ = tx
+            if let Err(e) = tx
                 .send(NotificationServiceSignal::CloseNotification { id })
-                .await;
+                .await
+            {
+                error!("Failed to send CloseNotification: {e}");
+            }
         }
 
         Ok(())
@@ -127,8 +143,13 @@ impl DBusService {
     pub fn new(
         data: Arc<RwLock<ServiceData>>,
         outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>,
-    ) -> Self {
-        Self { data, outer_tx }
+        cache_dir: Option<PathBuf>,
+    ) -> Result<Self> {
+        Ok(Self {
+            data,
+            outer_tx,
+            image_dir: get_image_dir(cache_dir)?,
+        })
     }
     fn save_pixbuf(&self, value: &OwnedValue, notification_id: u32) -> Option<String> {
         let s = value.downcast_ref::<Structure>().ok()?;
@@ -148,7 +169,7 @@ impl DBusService {
             .map(|v| u8::try_from(v).unwrap())
             .collect();
 
-        let path = (&*IMAGE_DIR).join(notification_id.to_string());
+        let path = self.image_dir.join(notification_id.to_string());
 
         Pixbuf::from_bytes(
             &glib::Bytes::from(&data),

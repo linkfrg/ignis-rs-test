@@ -29,7 +29,7 @@ gboolean    ignis_notifications_glib_service_close_notification_finish (IgnisNot
 void ignis_notifications_glib_service_invoke_action_async(IgnisNotificationsGLibService* self, guint32 notification_id, gchar* action_key, GCancellable* cancellable, GAsyncReadyCallback callback, gpointer user_data);
 gboolean    ignis_notifications_glib_service_invoke_action_finish (IgnisNotificationsGLibService * self, GAsyncResult *res, GError **error);
 
-void ignis_notifications_glib_service_clear_notifications(IgnisNotificationsGLibService* self);
+gboolean ignis_notifications_glib_service_clear_notifications(IgnisNotificationsGLibService* self, GError **error);
 
 G_END_DECLS
 

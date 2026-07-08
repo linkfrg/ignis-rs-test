@@ -1,41 +1,56 @@
-use crate::constants::FILE_PATH;
+use crate::file_utils::get_history_file_path;
 use crate::notification::DesktopNotification;
+use crate::{NotificationServiceError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
+use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize)]
 pub struct ServiceData {
     pub counter: u32,
     pub notifications: BTreeMap<u32, DesktopNotification>,
+
+    #[serde(skip)]
+    file_path: Option<PathBuf>, // If None - no file operations
 }
 
 impl ServiceData {
-    pub fn new() -> Self {
-        fs::read_to_string(&*FILE_PATH)
-            .and_then(|json_str| {
-                serde_json::from_str(&json_str)
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
-            })
-            .map_err(|e| {
-                println!("Error reading/deserializing file: {e}, falling back to empty data")
-            })
-            .ok()
-            .unwrap_or_else(Self::new_empty)
+    pub fn new(cache_dir: Option<PathBuf>) -> Result<Self> {
+        let file_path = get_history_file_path(cache_dir)?;
+
+        let json_str = match fs::read_to_string(&file_path) {
+            Ok(s) => s,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(Self::new_empty(Some(file_path)));
+            }
+            Err(e) => return Err(e.into()),
+        };
+
+        let mut obj: Self = serde_json::from_str(&json_str)?;
+        obj.file_path = Some(file_path);
+
+        Ok(obj)
     }
 
-    fn new_empty() -> Self {
+    pub fn new_in_memory() -> Self {
+        Self::new_empty(None)
+    }
+
+    fn new_empty(file_path: Option<PathBuf>) -> Self {
         Self {
             counter: 0,
             notifications: BTreeMap::new(),
+            file_path,
         }
     }
+
     pub fn add_notification(
         &mut self,
         id: u32,
         new_notification: DesktopNotification,
         replace: bool,
-    ) {
+    ) -> Result<()> {
         if !replace {
             self.notifications.insert(id, new_notification.clone());
         } else {
@@ -43,27 +58,33 @@ impl ServiceData {
                 *old_notification = new_notification.clone();
             }
         }
-        self.save_to_file();
+        self.save_to_file()?;
+
+        Ok(())
     }
 
-    pub fn remove_notification(&mut self, id: u32) {
-        self.notifications.remove(&id);
-        self.save_to_file();
+    pub fn remove_notification(&mut self, id: u32) -> Result<()> {
+        self.notifications
+            .remove(&id)
+            .ok_or_else(|| NotificationServiceError::NotificationNotFound(id))?;
+
+        self.save_to_file()?;
+        Ok(())
     }
 
-    pub fn clear(&mut self) {
+    pub fn clear(&mut self) -> Result<()> {
         self.notifications.clear();
         self.counter = 0;
-        self.save_to_file();
+        self.save_to_file()?;
+        Ok(())
     }
 
-    fn save_to_file(&self) {
-        let res = serde_json::to_string_pretty(self)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
-            .and_then(|json_str| fs::write(&*FILE_PATH, json_str));
+    fn save_to_file(&self) -> Result<()> {
+        if let Some(file_path) = self.file_path.clone() {
+            let json_str = serde_json::to_string_pretty(self)?;
+            fs::write(&file_path, json_str)?;
+        };
 
-        if let Err(e) = res {
-            println!("Error saving data to file: {e}");
-        }
+        Ok(())
     }
 }
