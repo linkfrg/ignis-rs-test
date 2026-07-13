@@ -106,20 +106,38 @@ impl NotificationService {
     }
 
     pub fn clear_notifications(&self) -> Result<()> {
+        // FIXME: it should emit NotificationClosed D-Bus signal for each notification
         self.data.write().unwrap().clear()
     }
 }
 
-// Run with `dbus-run-session cargo test`
+// Run with `dbus-run-session cargo test -- --test-threads=1`
+// WARNING: must be run serially to avoid D-Bus name conflicts
 #[cfg(test)]
 mod tests {
+    use std::{collections::HashMap, time::Duration};
+
     use super::*;
 
     use fake::Fake;
     use fake::faker::lorem::en::Sentence;
-    use notify_rust::{Notification, NotificationHandle, Urgency};
+    use notify_rust::{
+        CloseReason, Notification, NotificationHandle, NotificationResponse, Urgency,
+    };
     use rand::seq::IndexedRandom;
     use tempfile::TempDir;
+    use tokio::sync::oneshot;
+
+    struct TestContext {
+        _temp_dir: TempDir,
+        service: NotificationService,
+    }
+
+    fn no_tmp_cleanup() -> bool {
+        std::env::var_os("NO_TMP_CLEANUP")
+            .map(|v| v == "1")
+            .unwrap_or(false)
+    }
 
     async fn send_random_notification() -> NotificationHandle {
         let mut rng = rand::rng();
@@ -129,10 +147,6 @@ mod tests {
         let app_name: String = Sentence(1..3).fake();
         let icon: String = String::from("cat-sleeping-symbolic");
 
-        // Urgency levels
-        // 0 - Low
-        // 1 - Normal
-        // 2 - Critical
         let urgency_levels = [Urgency::Low, Urgency::Normal, Urgency::Critical];
         let urgency: Urgency = urgency_levels.choose(&mut rng).unwrap().to_owned();
 
@@ -150,28 +164,50 @@ mod tests {
             .icon(&icon)
             .timeout(timeout)
             .urgency(urgency)
-            .show()
+            .show_async()
+            .await
             .unwrap()
     }
 
-    async fn run_service() -> NotificationService {
-        let service = NotificationService::new(None, None).unwrap();
+    async fn send_multiple_random_notifications(quantity: u32) -> HashMap<u32, NotificationHandle> {
+        let mut map: HashMap<u32, NotificationHandle> = HashMap::new();
+
+        for _ in 0..quantity {
+            let handle = send_random_notification().await;
+            let id = handle.id();
+            map.insert(id, handle);
+        }
+
+        map
+    }
+
+    async fn setup() -> TestContext {
+        let mut temp_dir = TempDir::new().unwrap();
+
+        if no_tmp_cleanup() {
+            temp_dir.disable_cleanup(true);
+        }
+
+        let service = NotificationService::new(None, Some(temp_dir.path().to_path_buf())).unwrap();
         service.run().await.unwrap();
 
-        service
+        TestContext {
+            _temp_dir: temp_dir,
+            service,
+        }
     }
 
     #[tokio::test]
-    async fn test_notification() {
-        let service = run_service().await;
+    async fn test_single_notification() {
+        let ctx = setup().await;
         let test_notification = send_random_notification().await;
 
-        let notification = service
+        let notification = ctx
+            .service
             .get_notification_by_id(test_notification.id())
             .unwrap();
 
         assert_eq!(test_notification.appname, notification.app_name);
-        // TODO: check icon in the separate test
         assert_eq!(test_notification.icon, notification.icon.unwrap());
         assert_eq!(test_notification.summary, notification.summary);
         assert_eq!(test_notification.body, notification.body);
@@ -180,23 +216,91 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_notification() {
-        let service = run_service().await;
-        let handle = send_random_notification().await;
+    async fn test_multiple_notifications() {
+        let ctx = setup().await;
+        send_multiple_random_notifications(50).await;
 
-        assert!(service.get_notifications().is_sorted_by_key(|x| x.id));
-        assert!(service.get_notification_by_id(handle.id()).is_some());
-        assert_eq!(service.get_notifications().last().unwrap().id, handle.id());
+        assert!(ctx.service.get_notifications().is_sorted_by_key(|x| x.id));
+        assert_eq!(ctx.service.get_notifications().len(), 50);
     }
 
     #[tokio::test]
-    async fn test_close_notification() {}
+    async fn test_close_notification() {
+        let ctx = setup().await;
+        let handle = send_random_notification().await;
+        let id = handle.id();
+
+        let (tx, rx) = oneshot::channel();
+
+        tokio::spawn(async move {
+            handle
+                .wait_for_action_async(|response| {
+                    match response {
+                        NotificationResponse::Closed(reason) => tx.send(reason.to_owned()).unwrap(),
+                        _ => unimplemented!(),
+                    };
+                })
+                .await;
+        });
+        // FIXME: Hacky workaround to prevent the test from hanging
+        // For some reason calling NotificationService.close_notification() immediately
+        // makes the handle "miss" the signal and therefore never call the closure
+        tokio::time::sleep(Duration::from_millis(1)).await;
+
+        // TODO: maybe rename it to "dismiss_notification()"..?
+        ctx.service.close_notification(id).await.unwrap();
+
+        let close_reason = rx.await.unwrap();
+        assert_eq!(close_reason, CloseReason::Dismissed);
+    }
 
     #[tokio::test]
-    async fn test_invoke_action() {}
+    async fn test_invoke_action() {
+        let ctx = setup().await;
+        let handle = Notification::new()
+            .summary("i am waiting")
+            .action("default", "default")
+            .action("asked", "no one asked")
+            .show_async()
+            .await
+            .unwrap();
+        let id = handle.id();
+
+        let (tx, rx) = oneshot::channel();
+
+        tokio::spawn(async move {
+            handle
+                .wait_for_action_async(|response| {
+                    match response {
+                        NotificationResponse::Action(action) => {
+                            tx.send(action.clone()).unwrap();
+                        }
+                        _ => unimplemented!(),
+                    };
+                })
+                .await;
+        });
+
+        // FIXME: the same here
+        tokio::time::sleep(Duration::from_millis(1)).await;
+
+        // TODO: implement NotificationAction object
+        ctx.service.invoke_action(id, "asked").await.unwrap();
+        let action_key = rx.await.unwrap();
+        assert_eq!(action_key, "asked")
+    }
 
     #[tokio::test]
-    async fn test_clear_notifications() {}
+    async fn test_clear_notifications() {
+        let ctx = setup().await;
+
+        send_multiple_random_notifications(10).await;
+
+        assert_eq!(ctx.service.get_notifications().len(), 10);
+        ctx.service.clear_notifications().unwrap();
+
+        assert_eq!(ctx.service.get_notifications().len(), 0);
+    }
 
     #[tokio::test]
     async fn test_image_data() {}
