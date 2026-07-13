@@ -115,18 +115,29 @@ impl NotificationService {
 // WARNING: must be run serially to avoid D-Bus name conflicts
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, time::Duration};
 
     use super::*;
+    use std::{collections::HashMap, time::Duration};
+
+    use crate::Urgency;
 
     use fake::Fake;
     use fake::faker::lorem::en::Sentence;
-    use notify_rust::{
-        CloseReason, Notification, NotificationHandle, NotificationResponse, Urgency,
-    };
+    use notify_rust::Urgency as ClientUrgency;
+    use notify_rust::{CloseReason, Notification, NotificationHandle, NotificationResponse};
     use rand::seq::IndexedRandom;
     use tempfile::TempDir;
     use tokio::sync::oneshot;
+
+    impl From<Urgency> for ClientUrgency {
+        fn from(value: Urgency) -> Self {
+            match value {
+                Urgency::Low => ClientUrgency::Low,
+                Urgency::Normal => ClientUrgency::Normal,
+                Urgency::Critical => ClientUrgency::Critical,
+            }
+        }
+    }
 
     struct TestContext {
         _temp_dir: TempDir,
@@ -139,41 +150,28 @@ mod tests {
             .unwrap_or(false)
     }
 
-    async fn send_random_notification() -> NotificationHandle {
-        let mut rng = rand::rng();
-
+    fn create_random_notification() -> Notification {
         let summary: String = Sentence(3..6).fake();
         let body: String = Sentence(6..12).fake();
         let app_name: String = Sentence(1..3).fake();
         let icon: String = String::from("cat-sleeping-symbolic");
 
-        let urgency_levels = [Urgency::Low, Urgency::Normal, Urgency::Critical];
-        let urgency: Urgency = urgency_levels.choose(&mut rng).unwrap().to_owned();
+        let mut notification = Notification::new();
 
-        // If -1 - expiration time is dependent on the server's settings
-        // If 0 - never expire
-        // >0 - timeout time in milliseconds
-
-        let timeouts = [-1, 0, 500, 1000];
-        let timeout: i32 = timeouts.choose(&mut rng).unwrap().to_owned();
-
-        Notification::new()
+        notification
             .appname(&app_name)
             .summary(&summary)
             .body(&body)
-            .icon(&icon)
-            .timeout(timeout)
-            .urgency(urgency)
-            .show_async()
-            .await
-            .unwrap()
+            .icon(&icon);
+
+        notification
     }
 
     async fn send_multiple_random_notifications(quantity: u32) -> HashMap<u32, NotificationHandle> {
         let mut map: HashMap<u32, NotificationHandle> = HashMap::new();
 
         for _ in 0..quantity {
-            let handle = send_random_notification().await;
+            let handle = create_random_notification().show_async().await.unwrap();
             let id = handle.id();
             map.insert(id, handle);
         }
@@ -200,19 +198,32 @@ mod tests {
     #[tokio::test]
     async fn test_single_notification() {
         let ctx = setup().await;
-        let test_notification = send_random_notification().await;
 
-        let notification = ctx
-            .service
-            .get_notification_by_id(test_notification.id())
+        let client_urgency_levels = [
+            ClientUrgency::Low,
+            ClientUrgency::Normal,
+            ClientUrgency::Critical,
+        ];
+
+        let client_urgency: ClientUrgency = client_urgency_levels
+            .choose(&mut rand::rng())
+            .unwrap()
+            .to_owned();
+
+        let handle = create_random_notification()
+            .urgency(client_urgency)
+            .show_async()
+            .await
             .unwrap();
 
-        assert_eq!(test_notification.appname, notification.app_name);
-        assert_eq!(test_notification.icon, notification.icon.unwrap());
-        assert_eq!(test_notification.summary, notification.summary);
-        assert_eq!(test_notification.body, notification.body);
-        // assert_eq!(test_notification.urgency, notification.urgency);
-        assert_eq!(i32::from(test_notification.timeout), notification.timeout);
+        let notification = ctx.service.get_notification_by_id(handle.id()).unwrap();
+
+        assert_eq!(handle.appname, notification.app_name);
+        assert_eq!(handle.icon, notification.icon.unwrap());
+        assert_eq!(handle.summary, notification.summary);
+        assert_eq!(handle.body, notification.body);
+        assert_eq!(client_urgency, notification.urgency.into());
+        assert_eq!(i32::from(handle.timeout), notification.timeout);
     }
 
     #[tokio::test]
@@ -227,7 +238,7 @@ mod tests {
     #[tokio::test]
     async fn test_close_notification() {
         let ctx = setup().await;
-        let handle = send_random_notification().await;
+        let handle = create_random_notification().show_async().await.unwrap();
         let id = handle.id();
 
         let (tx, rx) = oneshot::channel();

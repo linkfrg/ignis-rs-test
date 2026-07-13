@@ -4,5 +4,6 @@
 #include "service.h"
 #include "error.h"
 #include "notification.h"
+#include "urgency.h"
 
 #endif

@@ -7,6 +7,6 @@ mod service;
 mod signals;
 
 pub use error::{NotificationServiceError, Result};
-pub use notification::DesktopNotification;
+pub use notification::{DesktopNotification, Urgency};
 pub use service::NotificationService;
 pub use signals::NotificationServiceSignal;

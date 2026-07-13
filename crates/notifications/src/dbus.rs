@@ -53,7 +53,8 @@ impl DBusService {
             urgency: hints
                 .get("urgency")
                 .and_then(|v| v.downcast_ref::<u8>().ok())
-                .unwrap_or(0),
+                .unwrap_or(0)
+                .into(),
             timeout,
         };
 

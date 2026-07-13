@@ -4,6 +4,7 @@ HEADERS = [
   'include/ignis-notifications-glib/service.h',
   'include/ignis-notifications-glib/error.h',
   'include/ignis-notifications-glib/notification.h',
+  'include/ignis-notifications-glib/urgency.h',
 ]
 MAIN_HEADER_FILE = 'ignis-notifications-glib/ignis-notifications-glib.h'
 NAMESPACE = 'IgnisNotificationsGLib'

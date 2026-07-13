@@ -143,10 +143,8 @@ def test_notification_properties(run_in_glib, notification_service):
         assert isinstance(latest.get_summary(), str)
         assert isinstance(latest.get_body(), str)
         assert isinstance(latest.get_actions(), list)
-        assert isinstance(latest.get_urgency(), int)
+        assert isinstance(latest.get_urgency(), IgnisNotificationsGLib.Urgency)
         assert isinstance(latest.get_timeout(), int)
-
-        print(latest.props.id)
 
         assert latest.props.id == latest.get_id()
         assert latest.props.app_name == latest.get_app_name()
@@ -212,3 +210,9 @@ def test_clear_notifications(run_in_glib, notification_service):
     run_in_glib(test())
 
     assert notifications_cleared_emitted
+
+
+def test_urgency():
+    assert hasattr(IgnisNotificationsGLib.Urgency, "LOW")
+    assert hasattr(IgnisNotificationsGLib.Urgency, "NORMAL")
+    assert hasattr(IgnisNotificationsGLib.Urgency, "CRITICAL")

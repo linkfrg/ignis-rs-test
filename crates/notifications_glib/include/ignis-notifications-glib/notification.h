@@ -3,6 +3,7 @@
 
 #include <glib-object.h>
 #include <gio/gio.h>
+#include <ignis-notifications-glib/urgency.h>
 
 G_BEGIN_DECLS
 
@@ -30,7 +31,7 @@ gchar* ignis_notifications_glib_notification_get_body (IgnisNotificationsGLibNot
  */
 GStrv ignis_notifications_glib_notification_get_actions (IgnisNotificationsGLibNotification* this); 
 
-guint8 ignis_notifications_glib_notification_get_urgency (IgnisNotificationsGLibNotification* this); 
+IgnisNotificationsGLibUrgency ignis_notifications_glib_notification_get_urgency (IgnisNotificationsGLibNotification* this); 
 
 gint32 ignis_notifications_glib_notification_get_timeout (IgnisNotificationsGLibNotification* this); 
 

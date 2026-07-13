@@ -5,6 +5,8 @@ use glib::prelude::*;
 use glib::subclass::prelude::*;
 use notifications::DesktopNotification;
 
+use crate::urgency::GUrgency;
+
 #[derive(Default)]
 pub struct GDesktopNotificationImp {
     pub notification: RefCell<DesktopNotification>,
@@ -34,7 +36,9 @@ impl ObjectImpl for GDesktopNotificationImp {
                 glib::ParamSpecBoxed::builder::<glib::StrV>("actions")
                     .read_only()
                     .build(),
-                glib::ParamSpecUInt::builder("urgency").read_only().build(),
+                glib::ParamSpecEnum::builder::<GUrgency>("urgency")
+                    .read_only()
+                    .build(),
                 glib::ParamSpecInt::builder("timeout").read_only().build(),
             ]
         })
@@ -48,7 +52,7 @@ impl ObjectImpl for GDesktopNotificationImp {
             "summary" => self.get_summary().to_value(),
             "body" => self.get_body().to_value(),
             "actions" => self.get_actions().to_value(),
-            "urgency" => (self.get_urgency() as u32).to_value(),
+            "urgency" => self.get_urgency().to_value(),
             "timeout" => self.get_timeout().to_value(),
             _ => unimplemented!(),
         }
@@ -79,16 +83,17 @@ impl GDesktopNotificationImp {
         self.notification.borrow().actions.clone()
     }
 
-    pub fn get_urgency(&self) -> u8 {
-        self.notification.borrow().urgency
+    pub fn get_urgency(&self) -> GUrgency {
+        self.notification.borrow().urgency.into()
     }
 
     pub fn get_timeout(&self) -> i32 {
         self.notification.borrow().timeout
     }
 }
-
 pub(crate) mod ffi {
+    use crate::urgency::ffi::IgnisNotificationsGLibUrgency;
+
     use super::*;
     use glib::translate::*;
 
@@ -159,9 +164,9 @@ pub(crate) mod ffi {
     #[unsafe(no_mangle)]
     pub extern "C" fn ignis_notifications_glib_notification_get_urgency(
         this: *mut IgnisNotificationsGLibNotification,
-    ) -> u8 {
+    ) -> IgnisNotificationsGLibUrgency {
         let imp = unsafe { (*this).imp() };
-        imp.get_urgency()
+        imp.get_urgency().into_glib()
     }
 
     #[unsafe(no_mangle)]
