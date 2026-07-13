@@ -59,7 +59,7 @@ impl DBusService {
 
         {
             let mut data = self.data.write().unwrap();
-            if replace {
+            if !replace {
                 data.counter += 1;
             }
 
