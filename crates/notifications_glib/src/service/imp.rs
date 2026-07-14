@@ -1,3 +1,4 @@
+use crate::close_reason::GCloseReason;
 use crate::error::GNotificationServiceError;
 use crate::notification::GDesktopNotification;
 use gio::prelude::ListModelExt;
@@ -62,7 +63,7 @@ impl ObjectImpl for GNotificationServiceImp {
                     .param_types([u32::static_type(), bool::static_type()])
                     .build(),
                 Signal::builder("closed")
-                    .param_types([u32::static_type()])
+                    .param_types([u32::static_type(), GCloseReason::static_type()])
                     .build(),
                 Signal::builder("notifications-cleared").build(),
             ]
@@ -97,8 +98,8 @@ impl ObjectImpl for GNotificationServiceImp {
 
             while let Some(signal) = obj.imp().rx.lock().await.recv().await {
                 match signal {
-                    NotificationServiceSignal::CloseNotification { id } => {
-                        obj.imp().close_notification_internal(id)
+                    NotificationServiceSignal::CloseNotification { id, reason } => {
+                        obj.imp().close_notification_internal(id, reason.into())
                     }
                     NotificationServiceSignal::Notified {
                         id,
@@ -137,7 +138,7 @@ impl ObjectImpl for GNotificationServiceImp {
 }
 
 impl GNotificationServiceImp {
-    fn close_notification_internal(&self, id: u32) {
+    fn close_notification_internal(&self, id: u32, reason: GCloseReason) {
         let notif_store = &self.notifications;
 
         let position =
@@ -150,7 +151,7 @@ impl GNotificationServiceImp {
 
             self.obj().notify("notifications");
             self.obj()
-                .emit_by_name_with_values("closed", &[id.to_value()]);
+                .emit_by_name_with_values("closed", &[id.to_value(), reason.to_value()]);
         }
     }
     pub async fn run_async(&self) -> Result<(), glib::Error> {
@@ -180,7 +181,7 @@ impl GNotificationServiceImp {
             .await
             .into_glib_error::<GNotificationServiceError>()?;
 
-        self.close_notification_internal(notification_id);
+        self.close_notification_internal(notification_id, GCloseReason::Dismissed);
 
         Ok(())
     }

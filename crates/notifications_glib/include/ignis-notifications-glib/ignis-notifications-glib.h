@@ -5,5 +5,6 @@
 #include "error.h"
 #include "notification.h"
 #include "urgency.h"
+#include "close_reason.h"
 
 #endif

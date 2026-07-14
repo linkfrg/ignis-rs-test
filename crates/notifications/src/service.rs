@@ -1,8 +1,8 @@
-use crate::DesktopNotification;
 use crate::data::ServiceData;
 use crate::dbus::{DBusService, DBusServiceSignals};
 use crate::error::{NotificationServiceError, Result};
 use crate::signals::NotificationServiceSignal;
+use crate::{CloseReason, DesktopNotification};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -74,7 +74,7 @@ impl NotificationService {
     pub async fn close_notification(&self, id: u32) -> Result<()> {
         self.get_dbus_interface()
             .await?
-            .notification_closed(id, 2)
+            .notification_closed(id, CloseReason::Dismissed.into())
             .await?;
 
         self.data.write().unwrap().remove_notification(id)?;

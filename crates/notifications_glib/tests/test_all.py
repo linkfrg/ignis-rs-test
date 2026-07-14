@@ -162,10 +162,11 @@ def test_close_notification(run_in_glib, notification_service):
     id_: int = -1
     closed_emitted: bool = False
 
-    def on_closed(x, closed_id):
+    def on_closed(x, closed_id, reason):
         nonlocal id_, closed_emitted
 
         assert id_ == closed_id
+        assert reason == IgnisNotificationsGLib.CloseReason.DISMISSED
         closed_emitted = True
 
     async def test():

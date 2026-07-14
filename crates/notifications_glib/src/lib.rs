@@ -1,3 +1,4 @@
+pub mod close_reason;
 pub mod error;
 pub mod notification;
 pub mod service;

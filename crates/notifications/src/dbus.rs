@@ -1,3 +1,4 @@
+use crate::CloseReason;
 use crate::NotificationServiceSignal;
 use crate::Result;
 use crate::data::ServiceData;
@@ -97,7 +98,9 @@ impl DBusService {
         id: u32,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) -> fdo::Result<()> {
-        emitter.notification_closed(id, 3).await?;
+        emitter
+            .notification_closed(id, CloseReason::DBusCall.into())
+            .await?;
 
         {
             let mut data = self.data.write().unwrap();
@@ -109,7 +112,10 @@ impl DBusService {
 
         if let Some(tx) = self.outer_tx.clone()
             && let Err(e) = tx
-                .send(NotificationServiceSignal::CloseNotification { id })
+                .send(NotificationServiceSignal::CloseNotification {
+                    id,
+                    reason: CloseReason::DBusCall,
+                })
                 .await
         {
             error!("Failed to send CloseNotification: {e}");
