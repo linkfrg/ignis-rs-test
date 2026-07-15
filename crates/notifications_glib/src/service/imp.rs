@@ -197,12 +197,15 @@ impl GNotificationServiceImp {
             .into_glib_error::<GNotificationServiceError>()
     }
 
-    pub fn clear_notifications(&self) -> Result<(), glib::Error> {
+    pub async fn clear_notifications(&self) -> Result<(), glib::Error> {
         // NOTE: it doesn't emit closed for each notification as it was before
         // Users should manually clear their notification list widget contents
+        //
         self.service
             .clear_notifications()
+            .await
             .into_glib_error::<GNotificationServiceError>()?;
+
         self.notifications.remove_all();
         self.obj()
             .emit_by_name_with_values("notifications-cleared", &[]);
@@ -268,20 +271,11 @@ pub(crate) mod ffi {
         imp.get_notifications().to_glib_full()
     }
 
-    #[unsafe(no_mangle)]
-    pub unsafe extern "C" fn ignis_notifications_glib_service_clear_notifications(
-        this: *mut IgnisNotificationsGLibService,
-        error: *mut *mut glib::ffi::GError,
-    ) -> glib::ffi::gboolean {
-        let imp = unsafe { (*this).imp() };
-        match imp.clear_notifications() {
-            Ok(()) => glib::ffi::GTRUE,
-            Err(e) => {
-                if !error.is_null() {
-                    unsafe { *error = e.into_glib_ptr() }
-                }
-                glib::ffi::GFALSE
-            }
-        }
-    }
+    glib_async_method!(
+        IgnisNotificationsGLibService,
+        super::super::GNotificationService,
+        ignis_notifications_glib_service_clear_notifications_async,
+        ignis_notifications_glib_service_clear_notifications_finish,
+        clear_notifications,
+    );
 }

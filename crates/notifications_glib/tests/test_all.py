@@ -203,7 +203,7 @@ def test_clear_notifications(run_in_glib, notification_service):
             await send_random_notification()
 
         notification_service.connect("notifications-cleared", on_clear_all)
-        notification_service.clear_notifications()
+        await notification_service.clear_notifications_async()
 
         assert len(notification_service.props.notifications) == 0
         assert len(notification_service.get_notifications()) == 0

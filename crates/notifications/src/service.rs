@@ -115,8 +115,14 @@ impl NotificationService {
         self.data.read().unwrap().notifications.get(&id).cloned()
     }
 
-    pub fn clear_notifications(&self) -> Result<()> {
-        // FIXME: it should emit NotificationClosed D-Bus signal for each notification
+    pub async fn clear_notifications(&self) -> Result<()> {
+        for id in self.data.read().unwrap().notifications.keys() {
+            self.get_dbus_interface()
+                .await?
+                .notification_closed(id.to_owned(), CloseReason::Dismissed.into())
+                .await?;
+        }
+
         self.data.write().unwrap().clear()
     }
 }
@@ -329,7 +335,7 @@ mod tests {
         send_multiple_random_notifications(10).await;
 
         assert_eq!(ctx.service.get_notifications().len(), 10);
-        ctx.service.clear_notifications().unwrap();
+        ctx.service.clear_notifications().await.unwrap();
 
         assert_eq!(ctx.service.get_notifications().len(), 0);
     }
