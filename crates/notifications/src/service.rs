@@ -42,16 +42,26 @@ impl NotificationService {
     }
 
     pub async fn run(&self) -> Result<()> {
+        let connection = Builder::session()?
+            .name("org.freedesktop.Notifications")?
+            .build()
+            .await?;
+
+        self.data
+            .write()
+            .unwrap()
+            .setup_connection(connection.clone());
+
         let service = DBusService::new(
+            connection.clone(),
             Arc::clone(&self.data),
             self.outer_tx.clone(),
             self.cache_dir.clone(),
         )?;
 
-        let connection = Builder::session()?
-            .name("org.freedesktop.Notifications")?
-            .serve_at("/org/freedesktop/Notifications", service)?
-            .build()
+        connection
+            .object_server()
+            .at("/org/freedesktop/Notifications", service)
             .await?;
 
         *self.connection.lock().await = Some(connection);
@@ -179,8 +189,8 @@ mod tests {
         map
     }
 
-    async fn setup() -> TestContext {
-        let mut temp_dir = TempDir::new().unwrap();
+    async fn setup_with_details(temp_dir: Option<TempDir>) -> TestContext {
+        let mut temp_dir = temp_dir.unwrap_or_else(|| TempDir::new().unwrap());
 
         if no_tmp_cleanup() {
             temp_dir.disable_cleanup(true);
@@ -193,6 +203,10 @@ mod tests {
             _temp_dir: temp_dir,
             service,
         }
+    }
+
+    async fn setup() -> TestContext {
+        setup_with_details(None).await
     }
 
     #[tokio::test]
@@ -295,8 +309,15 @@ mod tests {
         // FIXME: the same here
         tokio::time::sleep(Duration::from_millis(1)).await;
 
-        // TODO: implement NotificationAction object
-        ctx.service.invoke_action(id, "asked").await.unwrap();
+        let n = ctx.service.get_notification_by_id(id).unwrap();
+        assert_eq!(n.actions.len(), 2);
+
+        for action in n.actions {
+            if action.action_key == "asked" {
+                action.invoke().await.unwrap();
+            }
+        }
+
         let action_key = rx.await.unwrap();
         assert_eq!(action_key, "asked")
     }
@@ -311,6 +332,36 @@ mod tests {
         ctx.service.clear_notifications().unwrap();
 
         assert_eq!(ctx.service.get_notifications().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_data_have_connection() {
+        let ctx_prep = setup().await;
+
+        for _ in 0..10 {
+            create_random_notification()
+                .action("default", "default")
+                .action("example", "Example")
+                .show_async()
+                .await
+                .unwrap();
+        }
+
+        // Move out and drop service
+        let TestContext { _temp_dir, service } = ctx_prep;
+        drop(service);
+
+        // Reinit so data is loaded from the file
+        let ctx = setup_with_details(Some(_temp_dir)).await;
+
+        assert_eq!(ctx.service.get_notifications().len(), 10);
+
+        for n in ctx.service.data.read().unwrap().notifications.values() {
+            assert_eq!(n.actions.len(), 2);
+            for a in &n.actions {
+                assert!(a.connection.is_some());
+            }
+        }
     }
 
     #[tokio::test]

@@ -1,3 +1,4 @@
+use crate::Action;
 use crate::CloseReason;
 use crate::NotificationServiceSignal;
 use crate::Result;
@@ -11,12 +12,23 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use tokio::sync::mpsc;
 use tracing::error;
+use zbus::Connection;
 use zbus::fdo;
+use zbus::object_server::InterfaceRef;
 use zbus::object_server::SignalEmitter;
 use zbus::{interface, zvariant::OwnedValue};
 use zvariant::{Array, Structure};
 
+pub async fn get_interface_ref(connection: &Connection) -> Result<InterfaceRef<DBusService>> {
+    Ok(connection
+        .object_server()
+        .interface("/org/freedesktop/Notifications")
+        .await?
+        .into())
+}
+
 pub struct DBusService {
+    connection: Connection,
     data: Arc<RwLock<ServiceData>>,
     outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>,
     image_dir: PathBuf,
@@ -44,13 +56,26 @@ impl DBusService {
             self.data.read().unwrap().counter + 1
         };
 
+        let mut iter = actions.into_iter();
+
+        let mut action_obj_vec = Vec::new();
+
+        while let (Some(action_key), Some(label)) = (iter.next(), iter.next()) {
+            action_obj_vec.push(Action {
+                connection: Some(self.connection.clone()),
+                notification_id: id,
+                label,
+                action_key,
+            })
+        }
+
         let new_notification = DesktopNotification {
             id,
             app_name: app_name.to_string(),
             icon: self.get_icon(app_icon, &hints, id),
             summary: summary.to_string(),
             body: body.to_string(),
-            actions,
+            actions: action_obj_vec,
             urgency: hints
                 .get("urgency")
                 .and_then(|v| v.downcast_ref::<u8>().ok())
@@ -146,11 +171,13 @@ impl DBusService {
 
 impl DBusService {
     pub fn new(
+        connection: Connection,
         data: Arc<RwLock<ServiceData>>,
         outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>,
         cache_dir: Option<PathBuf>,
     ) -> Result<Self> {
         Ok(Self {
+            connection,
             data,
             outer_tx,
             image_dir: get_image_dir(cache_dir)?,

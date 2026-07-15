@@ -6,5 +6,6 @@
 #include "notification.h"
 #include "urgency.h"
 #include "close_reason.h"
+#include "action.h"
 
 #endif

@@ -27,9 +27,9 @@ gchar* ignis_notifications_glib_notification_get_body (IgnisNotificationsGLibNot
  * ignis_notifications_glib_notification_get_actions:
  * @this: a #IgnisNotificationsGLibNotification
  *
- * Returns: (transfer full)
+ * Returns: (transfer full) (element-type IgnisNotificationsGLibAction)
  */
-GStrv ignis_notifications_glib_notification_get_actions (IgnisNotificationsGLibNotification* this); 
+GPtrArray* ignis_notifications_glib_notification_get_actions (IgnisNotificationsGLibNotification* this); 
 
 IgnisNotificationsGLibUrgency ignis_notifications_glib_notification_get_urgency (IgnisNotificationsGLibNotification* this); 
 

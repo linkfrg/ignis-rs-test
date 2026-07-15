@@ -1,15 +1,26 @@
 use std::cell::RefCell;
 use std::sync::OnceLock;
 
+use gio::prelude::ListModelExt;
 use glib::prelude::*;
 use glib::subclass::prelude::*;
 use notifications::DesktopNotification;
 
+use crate::action::GAction;
 use crate::urgency::GUrgency;
 
-#[derive(Default)]
 pub struct GDesktopNotificationImp {
     pub notification: RefCell<DesktopNotification>,
+    pub(crate) actions: gio::ListStore,
+}
+
+impl Default for GDesktopNotificationImp {
+    fn default() -> Self {
+        Self {
+            notification: RefCell::new(DesktopNotification::default()),
+            actions: gio::ListStore::new::<GAction>(),
+        }
+    }
 }
 
 #[glib::object_subclass]
@@ -33,7 +44,7 @@ impl ObjectImpl for GDesktopNotificationImp {
                     .read_only()
                     .build(),
                 glib::ParamSpecString::builder("body").read_only().build(),
-                glib::ParamSpecBoxed::builder::<glib::StrV>("actions")
+                glib::ParamSpecObject::builder::<gio::ListStore>("actions")
                     .read_only()
                     .build(),
                 glib::ParamSpecEnum::builder::<GUrgency>("urgency")
@@ -51,7 +62,7 @@ impl ObjectImpl for GDesktopNotificationImp {
             "icon" => self.get_icon().to_value(),
             "summary" => self.get_summary().to_value(),
             "body" => self.get_body().to_value(),
-            "actions" => self.get_actions().to_value(),
+            "actions" => self.actions.to_value(),
             "urgency" => self.get_urgency().to_value(),
             "timeout" => self.get_timeout().to_value(),
             _ => unimplemented!(),
@@ -79,8 +90,17 @@ impl GDesktopNotificationImp {
         self.notification.borrow().body.clone()
     }
 
-    pub fn get_actions(&self) -> Vec<String> {
-        self.notification.borrow().actions.clone()
+    pub fn get_actions(&self) -> Vec<GAction> {
+        let mut res = Vec::new();
+        for i in 0..self.actions.n_items() {
+            if let Some(item) = self.actions.item(i) {
+                if let Ok(action) = item.downcast::<GAction>() {
+                    res.push(action);
+                }
+            }
+        }
+
+        res
     }
 
     pub fn get_urgency(&self) -> GUrgency {
@@ -156,7 +176,7 @@ pub(crate) mod ffi {
     #[unsafe(no_mangle)]
     pub extern "C" fn ignis_notifications_glib_notification_get_actions(
         this: *mut IgnisNotificationsGLibNotification,
-    ) -> glib::ffi::GStrv {
+    ) -> *mut glib::ffi::GPtrArray {
         let imp = unsafe { (*this).imp() };
         imp.get_actions().to_glib_full()
     }

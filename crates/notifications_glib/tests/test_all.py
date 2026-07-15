@@ -151,9 +151,9 @@ def test_notification_properties(run_in_glib, notification_service):
         assert latest.props.icon == latest.get_icon()
         assert latest.props.summary == latest.get_summary()
         assert latest.props.body == latest.get_body()
-        assert latest.props.actions == latest.get_actions()
         assert latest.props.urgency == latest.get_urgency()
         assert latest.props.timeout == latest.get_timeout()
+        assert isinstance(latest.props.actions, Gio.ListStore)
 
     run_in_glib(test())
 
@@ -217,3 +217,13 @@ def test_urgency():
     assert hasattr(IgnisNotificationsGLib.Urgency, "LOW")
     assert hasattr(IgnisNotificationsGLib.Urgency, "NORMAL")
     assert hasattr(IgnisNotificationsGLib.Urgency, "CRITICAL")
+
+
+def test_action():
+    # TODO: call invoke action here
+    assert hasattr(IgnisNotificationsGLib, "Action")
+    assert hasattr(IgnisNotificationsGLib.Action, "get_notification_id")
+    assert hasattr(IgnisNotificationsGLib.Action, "get_label")
+    assert hasattr(IgnisNotificationsGLib.Action, "get_action_key")
+    assert hasattr(IgnisNotificationsGLib.Action, "invoke_async")
+    assert hasattr(IgnisNotificationsGLib.Action, "invoke_finish")

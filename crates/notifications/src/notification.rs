@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::Action;
+
 #[derive(Copy, Clone, Serialize, Deserialize, Default)]
 pub enum Urgency {
     #[default]
@@ -36,7 +38,7 @@ pub struct DesktopNotification {
     pub icon: Option<String>,
     pub summary: String,
     pub body: String,
-    pub actions: Vec<String>,
+    pub actions: Vec<Action>,
     pub urgency: Urgency,
     pub timeout: i32,
 }

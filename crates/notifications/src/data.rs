@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
+use zbus::Connection;
 
 #[derive(Serialize, Deserialize)]
 pub struct ServiceData {
@@ -35,6 +36,14 @@ impl ServiceData {
 
     pub fn new_in_memory() -> Self {
         Self::new_empty(None)
+    }
+
+    pub(crate) fn setup_connection(&mut self, connection: Connection) {
+        for n in self.notifications.values_mut() {
+            for a in &mut n.actions {
+                a.connection = Some(connection.clone());
+            }
+        }
     }
 
     fn new_empty(file_path: Option<PathBuf>) -> Self {
