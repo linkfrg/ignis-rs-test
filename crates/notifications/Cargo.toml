@@ -10,7 +10,7 @@ tokio.workspace = true
 gdk-pixbuf.workspace = true
 tracing.workspace = true
 
-serde = "1.0.228"
+serde = { version = "1.0.228", features = ["rc"] }
 serde_json = "1.0.149"
 thiserror = "2.0.17"
 zbus = "5.12.0"

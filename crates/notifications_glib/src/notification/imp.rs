@@ -4,20 +4,20 @@ use std::sync::OnceLock;
 use gio::prelude::ListModelExt;
 use glib::prelude::*;
 use glib::subclass::prelude::*;
-use notifications::DesktopNotification;
+use notifications::NotificationHandle;
 
 use crate::action::GAction;
 use crate::urgency::GUrgency;
 
 pub struct GDesktopNotificationImp {
-    pub notification: RefCell<DesktopNotification>,
+    pub notification: RefCell<NotificationHandle>,
     pub(crate) actions: gio::ListStore,
 }
 
 impl Default for GDesktopNotificationImp {
     fn default() -> Self {
         Self {
-            notification: RefCell::new(DesktopNotification::default()),
+            notification: RefCell::new(NotificationHandle::default()),
             actions: gio::ListStore::new::<GAction>(),
         }
     }
@@ -71,23 +71,23 @@ impl ObjectImpl for GDesktopNotificationImp {
 }
 impl GDesktopNotificationImp {
     pub fn get_id(&self) -> u32 {
-        self.notification.borrow().id
+        self.notification.borrow().id()
     }
 
     pub fn get_app_name(&self) -> String {
-        self.notification.borrow().app_name.clone()
+        self.notification.borrow().app_name().clone()
     }
 
     pub fn get_icon(&self) -> Option<String> {
-        self.notification.borrow().icon.clone()
+        self.notification.borrow().icon().clone()
     }
 
     pub fn get_summary(&self) -> String {
-        self.notification.borrow().summary.clone()
+        self.notification.borrow().summary().clone()
     }
 
     pub fn get_body(&self) -> String {
-        self.notification.borrow().body.clone()
+        self.notification.borrow().body().clone()
     }
 
     pub fn get_actions(&self) -> Vec<GAction> {
@@ -104,11 +104,11 @@ impl GDesktopNotificationImp {
     }
 
     pub fn get_urgency(&self) -> GUrgency {
-        self.notification.borrow().urgency.into()
+        self.notification.borrow().urgency().into()
     }
 
     pub fn get_timeout(&self) -> i32 {
-        self.notification.borrow().timeout
+        self.notification.borrow().timeout()
     }
 }
 pub(crate) mod ffi {

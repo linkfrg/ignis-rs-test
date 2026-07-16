@@ -7,7 +7,7 @@ glib::wrapper! {
 }
 
 impl GAction {
-    pub(crate) fn new_from_rust(action: notifications::Action) -> Self {
+    pub(crate) fn new_from_rust(action: notifications::ActionHandle) -> Self {
         let obj: Self = glib::Object::builder().build();
 
         obj.imp().action.replace(action);

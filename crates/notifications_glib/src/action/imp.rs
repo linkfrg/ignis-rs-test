@@ -6,13 +6,13 @@ use glib::subclass::prelude::*;
 use glib_utils::IntoGLibError;
 use glib_utils::glib_async_method;
 use glib_utils::runtime;
-use notifications::Action;
+use notifications::ActionHandle;
 
 use crate::error::GNotificationServiceError;
 
 #[derive(Default)]
 pub struct GActionImp {
-    pub action: RefCell<Action>,
+    pub action: RefCell<ActionHandle>,
 }
 
 #[glib::object_subclass]
@@ -49,15 +49,15 @@ impl ObjectImpl for GActionImp {
 }
 impl GActionImp {
     pub fn get_notification_id(&self) -> u32 {
-        self.action.borrow().notification_id
+        self.action.borrow().notification_id()
     }
 
     pub fn get_label(&self) -> String {
-        self.action.borrow().label.clone()
+        self.action.borrow().label().clone()
     }
 
     pub fn get_action_key(&self) -> String {
-        self.action.borrow().action_key.clone()
+        self.action.borrow().action_key().clone()
     }
 
     pub async fn invoke(&self) -> Result<(), glib::Error> {

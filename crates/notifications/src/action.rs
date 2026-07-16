@@ -1,30 +1,37 @@
-use crate::NotificationServiceError;
-use crate::dbus::DBusServiceSignals;
-use crate::{Result, dbus::get_interface_ref};
+use crate::NotificationService;
+use crate::Result;
 use serde::{Deserialize, Serialize};
-use zbus::connection::Connection;
+use std::sync::Arc;
 
-#[derive(Serialize, Deserialize, Clone, Default)]
-pub struct Action {
-    #[serde(skip)]
-    pub(crate) connection: Option<Connection>,
-
-    pub notification_id: u32,
-    pub label: String,
-    pub action_key: String,
+#[derive(Serialize, Deserialize, Default)]
+pub(crate) struct Action {
+    pub(crate) notification_id: u32,
+    pub(crate) label: String,
+    pub(crate) action_key: String,
 }
 
-impl Action {
-    pub async fn invoke(&self) -> Result<()> {
-        let interface = get_interface_ref(
-            self.connection
-                .as_ref()
-                .ok_or(NotificationServiceError::NoConnection)?,
-        )
-        .await?;
+#[derive(Default, Clone)]
+pub struct ActionHandle {
+    pub(crate) inner: Arc<Action>,
+    pub(crate) service: NotificationService,
+}
 
-        interface
-            .action_invoked(self.notification_id, &self.action_key)
+impl ActionHandle {
+    pub fn notification_id(&self) -> u32 {
+        self.inner.notification_id
+    }
+
+    pub fn label(&self) -> String {
+        self.inner.label.clone()
+    }
+
+    pub fn action_key(&self) -> String {
+        self.inner.action_key.clone()
+    }
+
+    pub async fn invoke(&self) -> Result<()> {
+        self.service
+            .invoke_action(self.inner.notification_id, &self.inner.action_key)
             .await?;
 
         Ok(())

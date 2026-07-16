@@ -1,36 +1,23 @@
-use crate::Action;
 use crate::CloseReason;
+use crate::NotificationHandle;
+use crate::NotificationService;
 use crate::NotificationServiceSignal;
 use crate::Result;
-use crate::data::ServiceData;
+use crate::action::Action;
 use crate::file_utils::get_image_dir;
 use crate::notification::DesktopNotification;
 use gdk_pixbuf::{Colorspace, Pixbuf};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::RwLock;
-use tokio::sync::mpsc;
 use tracing::error;
-use zbus::Connection;
 use zbus::fdo;
-use zbus::object_server::InterfaceRef;
 use zbus::object_server::SignalEmitter;
 use zbus::{interface, zvariant::OwnedValue};
 use zvariant::{Array, Structure};
 
-pub async fn get_interface_ref(connection: &Connection) -> Result<InterfaceRef<DBusService>> {
-    Ok(connection
-        .object_server()
-        .interface("/org/freedesktop/Notifications")
-        .await?
-        .into())
-}
-
 pub struct DBusService {
-    connection: Connection,
-    data: Arc<RwLock<ServiceData>>,
-    outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>,
+    service: NotificationService,
     image_dir: PathBuf,
 }
 
@@ -53,7 +40,7 @@ impl DBusService {
         let id: u32 = if replace {
             replaces_id
         } else {
-            self.data.read().unwrap().counter + 1
+            self.service.inner.data.read().unwrap().counter + 1
         };
 
         let mut iter = actions.into_iter();
@@ -61,15 +48,14 @@ impl DBusService {
         let mut action_obj_vec = Vec::new();
 
         while let (Some(action_key), Some(label)) = (iter.next(), iter.next()) {
-            action_obj_vec.push(Action {
-                connection: Some(self.connection.clone()),
+            action_obj_vec.push(Arc::new(Action {
                 notification_id: id,
                 label,
                 action_key,
-            })
+            }))
         }
 
-        let new_notification = DesktopNotification {
+        let new_notification = Arc::new(DesktopNotification {
             id,
             app_name: app_name.to_string(),
             icon: self.get_icon(app_icon, &hints, id),
@@ -82,10 +68,10 @@ impl DBusService {
                 .unwrap_or(0)
                 .into(),
             timeout,
-        };
+        });
 
         {
-            let mut data = self.data.write().unwrap();
+            let mut data = self.service.inner.data.write().unwrap();
             if !replace {
                 data.counter += 1;
             }
@@ -95,11 +81,16 @@ impl DBusService {
             }
         };
 
-        if let Some(tx) = self.outer_tx.clone()
+        let handle = NotificationHandle {
+            inner: new_notification,
+            service: self.service.clone(),
+        };
+
+        if let Some(tx) = self.service.inner.outer_tx.clone()
             && let Err(e) = tx
                 .send(NotificationServiceSignal::Notified {
                     id,
-                    notification: new_notification,
+                    notification: handle,
                     replace,
                 })
                 .await
@@ -128,14 +119,14 @@ impl DBusService {
             .await?;
 
         {
-            let mut data = self.data.write().unwrap();
+            let mut data = self.service.inner.data.write().unwrap();
 
             if let Err(e) = data.remove_notification(id) {
                 error!("Can not remove notification: {e}");
             }
         };
 
-        if let Some(tx) = self.outer_tx.clone()
+        if let Some(tx) = self.service.inner.outer_tx.clone()
             && let Err(e) = tx
                 .send(NotificationServiceSignal::CloseNotification {
                     id,
@@ -170,17 +161,10 @@ impl DBusService {
 }
 
 impl DBusService {
-    pub fn new(
-        connection: Connection,
-        data: Arc<RwLock<ServiceData>>,
-        outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>,
-        cache_dir: Option<PathBuf>,
-    ) -> Result<Self> {
+    pub fn new(service: NotificationService) -> Result<Self> {
         Ok(Self {
-            connection,
-            data,
-            outer_tx,
-            image_dir: get_image_dir(cache_dir)?,
+            image_dir: get_image_dir(service.inner.cache_dir.clone())?,
+            service,
         })
     }
     fn save_pixbuf(&self, value: &OwnedValue, notification_id: u32) -> Option<String> {

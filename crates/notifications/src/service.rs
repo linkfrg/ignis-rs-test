@@ -1,8 +1,9 @@
+use crate::CloseReason;
 use crate::data::ServiceData;
 use crate::dbus::{DBusService, DBusServiceSignals};
 use crate::error::{NotificationServiceError, Result};
+use crate::notification::NotificationHandle;
 use crate::signals::NotificationServiceSignal;
-use crate::{CloseReason, DesktopNotification};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -12,11 +13,16 @@ use zbus::Connection;
 use zbus::connection::Builder;
 use zbus::object_server::InterfaceRef;
 
+pub(crate) struct NotificationServiceInner {
+    pub(crate) data: RwLock<ServiceData>,
+    pub(crate) connection: Mutex<Option<Connection>>,
+    pub(crate) outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>,
+    pub(crate) cache_dir: Option<PathBuf>,
+}
+
+#[derive(Clone)]
 pub struct NotificationService {
-    data: Arc<RwLock<ServiceData>>,
-    connection: Mutex<Option<Connection>>,
-    outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>,
-    cache_dir: Option<PathBuf>,
+    pub(crate) inner: Arc<NotificationServiceInner>,
 }
 
 impl NotificationService {
@@ -25,52 +31,43 @@ impl NotificationService {
         cache_dir: Option<PathBuf>,
     ) -> Result<Self> {
         Ok(Self {
-            data: Arc::new(RwLock::new(ServiceData::new(cache_dir.clone())?)),
-            connection: Mutex::new(None),
-            outer_tx,
-            cache_dir,
+            inner: Arc::new(NotificationServiceInner {
+                data: RwLock::new(ServiceData::new(cache_dir.clone())?),
+                connection: Mutex::new(None),
+                outer_tx,
+                cache_dir,
+            }),
         })
     }
 
     pub fn new_in_memory(outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>) -> Self {
         Self {
-            data: Arc::new(RwLock::new(ServiceData::new_in_memory())),
-            connection: Mutex::new(None),
-            outer_tx,
-            cache_dir: None,
+            inner: Arc::new(NotificationServiceInner {
+                data: RwLock::new(ServiceData::new_in_memory()),
+                connection: Mutex::new(None),
+                outer_tx,
+                cache_dir: None,
+            }),
         }
     }
 
     pub async fn run(&self) -> Result<()> {
+        let service = DBusService::new(self.clone())?;
+
         let connection = Builder::session()?
             .name("org.freedesktop.Notifications")?
+            .serve_at("/org/freedesktop/Notifications", service)?
             .build()
             .await?;
 
-        self.data
-            .write()
-            .unwrap()
-            .setup_connection(connection.clone());
-
-        let service = DBusService::new(
-            connection.clone(),
-            Arc::clone(&self.data),
-            self.outer_tx.clone(),
-            self.cache_dir.clone(),
-        )?;
-
-        connection
-            .object_server()
-            .at("/org/freedesktop/Notifications", service)
-            .await?;
-
-        *self.connection.lock().await = Some(connection);
+        *self.inner.connection.lock().await = Some(connection);
 
         Ok(())
     }
 
     async fn get_dbus_interface(&self) -> Result<InterfaceRef<DBusService>> {
         Ok(self
+            .inner
             .connection
             .lock()
             .await
@@ -87,7 +84,7 @@ impl NotificationService {
             .notification_closed(id, CloseReason::Dismissed.into())
             .await?;
 
-        self.data.write().unwrap().remove_notification(id)?;
+        self.inner.data.write().unwrap().remove_notification(id)?;
 
         Ok(())
     }
@@ -101,32 +98,50 @@ impl NotificationService {
         Ok(())
     }
 
-    pub fn get_notifications(&self) -> Vec<DesktopNotification> {
-        self.data
+    pub fn get_notifications(&self) -> Vec<NotificationHandle> {
+        self.inner
+            .data
             .read()
             .unwrap()
             .notifications
             .values()
-            .cloned()
+            .map(|n| NotificationHandle {
+                inner: Arc::clone(n),
+                service: self.clone(),
+            })
             .collect()
     }
 
-    pub fn get_notification_by_id(&self, id: u32) -> Option<DesktopNotification> {
-        self.data.read().unwrap().notifications.get(&id).cloned()
+    pub fn get_notification_by_id(&self, id: u32) -> Option<NotificationHandle> {
+        self.inner
+            .data
+            .read()
+            .unwrap()
+            .notifications
+            .get(&id)
+            .map(|n| NotificationHandle {
+                inner: n.clone(),
+                service: self.clone(),
+            })
     }
 
     pub async fn clear_notifications(&self) -> Result<()> {
-        for id in self.data.read().unwrap().notifications.keys() {
+        for id in self.inner.data.read().unwrap().notifications.keys() {
             self.get_dbus_interface()
                 .await?
                 .notification_closed(id.to_owned(), CloseReason::Dismissed.into())
                 .await?;
         }
 
-        self.data.write().unwrap().clear()
+        self.inner.data.write().unwrap().clear()
     }
 }
 
+impl Default for NotificationService {
+    fn default() -> Self {
+        Self::new_in_memory(None)
+    }
+}
 // Run with `dbus-run-session cargo test -- --test-threads=1`
 // WARNING: must be run serially to avoid D-Bus name conflicts
 #[cfg(test)]
@@ -238,12 +253,12 @@ mod tests {
 
         let notification = ctx.service.get_notification_by_id(handle.id()).unwrap();
 
-        assert_eq!(handle.appname, notification.app_name);
-        assert_eq!(handle.icon, notification.icon.unwrap());
-        assert_eq!(handle.summary, notification.summary);
-        assert_eq!(handle.body, notification.body);
-        assert_eq!(client_urgency, notification.urgency.into());
-        assert_eq!(i32::from(handle.timeout), notification.timeout);
+        assert_eq!(handle.appname, notification.app_name());
+        assert_eq!(handle.icon, notification.icon().unwrap());
+        assert_eq!(handle.summary, notification.summary());
+        assert_eq!(handle.body, notification.body());
+        assert_eq!(client_urgency, notification.urgency().into());
+        assert_eq!(i32::from(handle.timeout), notification.timeout());
     }
 
     #[tokio::test]
@@ -251,7 +266,7 @@ mod tests {
         let ctx = setup().await;
         send_multiple_random_notifications(50).await;
 
-        assert!(ctx.service.get_notifications().is_sorted_by_key(|x| x.id));
+        assert!(ctx.service.get_notifications().is_sorted_by_key(|x| x.id()));
         assert_eq!(ctx.service.get_notifications().len(), 50);
     }
 
@@ -316,10 +331,10 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(1)).await;
 
         let n = ctx.service.get_notification_by_id(id).unwrap();
-        assert_eq!(n.actions.len(), 2);
+        assert_eq!(n.actions().len(), 2);
 
-        for action in n.actions {
-            if action.action_key == "asked" {
+        for action in n.actions() {
+            if action.action_key() == "asked" {
                 action.invoke().await.unwrap();
             }
         }
@@ -338,36 +353,6 @@ mod tests {
         ctx.service.clear_notifications().await.unwrap();
 
         assert_eq!(ctx.service.get_notifications().len(), 0);
-    }
-
-    #[tokio::test]
-    async fn test_data_have_connection() {
-        let ctx_prep = setup().await;
-
-        for _ in 0..10 {
-            create_random_notification()
-                .action("default", "default")
-                .action("example", "Example")
-                .show_async()
-                .await
-                .unwrap();
-        }
-
-        // Move out and drop service
-        let TestContext { _temp_dir, service } = ctx_prep;
-        drop(service);
-
-        // Reinit so data is loaded from the file
-        let ctx = setup_with_details(Some(_temp_dir)).await;
-
-        assert_eq!(ctx.service.get_notifications().len(), 10);
-
-        for n in ctx.service.data.read().unwrap().notifications.values() {
-            assert_eq!(n.actions.len(), 2);
-            for a in &n.actions {
-                assert!(a.connection.is_some());
-            }
-        }
     }
 
     #[tokio::test]

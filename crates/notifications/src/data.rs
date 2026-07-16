@@ -5,12 +5,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
-use zbus::Connection;
+use std::sync::Arc;
 
 #[derive(Serialize, Deserialize)]
 pub struct ServiceData {
     pub counter: u32,
-    pub notifications: BTreeMap<u32, DesktopNotification>,
+    pub notifications: BTreeMap<u32, Arc<DesktopNotification>>,
 
     #[serde(skip)]
     file_path: Option<PathBuf>, // If None - no file operations
@@ -38,14 +38,6 @@ impl ServiceData {
         Self::new_empty(None)
     }
 
-    pub(crate) fn setup_connection(&mut self, connection: Connection) {
-        for n in self.notifications.values_mut() {
-            for a in &mut n.actions {
-                a.connection = Some(connection.clone());
-            }
-        }
-    }
-
     fn new_empty(file_path: Option<PathBuf>) -> Self {
         Self {
             counter: 0,
@@ -57,14 +49,14 @@ impl ServiceData {
     pub fn add_notification(
         &mut self,
         id: u32,
-        new_notification: DesktopNotification,
+        new_notification: Arc<DesktopNotification>,
         replace: bool,
     ) -> Result<()> {
         if !replace {
-            self.notifications.insert(id, new_notification.clone());
+            self.notifications.insert(id, new_notification);
         } else {
             if let Some(old_notification) = self.notifications.get_mut(&id) {
-                *old_notification = new_notification.clone();
+                *old_notification = new_notification;
             }
         }
         self.save_to_file()?;
