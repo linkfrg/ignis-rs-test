@@ -8,6 +8,7 @@ pub enum GNotificationServiceError {
     IOError,
     JSONError,
     NotificationNotFound,
+    ConnectionInitializedTwice,
 }
 
 impl From<&NotificationServiceError> for GNotificationServiceError {
@@ -19,6 +20,9 @@ impl From<&NotificationServiceError> for GNotificationServiceError {
             NotificationServiceError::JSONError(_) => GNotificationServiceError::JSONError,
             NotificationServiceError::NotificationNotFound(_) => {
                 GNotificationServiceError::NotificationNotFound
+            }
+            NotificationServiceError::ConnectionInitializedTwice => {
+                GNotificationServiceError::ConnectionInitializedTwice
             }
         }
     }
@@ -44,6 +48,10 @@ pub(crate) mod ffi {
 
     pub const IGNIS_NOTIFICATIONS_GLIB_NOTIFICATION_NOT_FOUND: IgnisNotificationsGLibError =
         super::GNotificationServiceError::NotificationNotFound as i32;
+
+    pub const IGNIS_NOTIFICATIONS_GLIB_NOTIFICATION_CONNECTION_INITIALIZED_TWICE:
+        IgnisNotificationsGLibError =
+        super::GNotificationServiceError::ConnectionInitializedTwice as i32;
 
     #[unsafe(no_mangle)]
     pub unsafe extern "C" fn ignis_notifications_glib_error_quark() -> glib::ffi::GQuark {
