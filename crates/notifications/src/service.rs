@@ -12,6 +12,7 @@ use zbus::Connection;
 use zbus::connection::Builder;
 use zbus::object_server::InterfaceRef;
 
+#[derive(Default)]
 pub(crate) struct NotificationServiceInner {
     pub(crate) data: ServiceData,
     pub(crate) connection: OnceLock<Option<Connection>>,
@@ -19,7 +20,7 @@ pub(crate) struct NotificationServiceInner {
     pub(crate) cache_dir: Option<PathBuf>,
 }
 
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct NotificationService {
     pub(crate) inner: Arc<NotificationServiceInner>,
 }
@@ -140,11 +141,6 @@ impl NotificationService {
     }
 }
 
-impl Default for NotificationService {
-    fn default() -> Self {
-        Self::new_in_memory(None)
-    }
-}
 // Run with `dbus-run-session cargo test -- --test-threads=1`
 // WARNING: must be run serially to avoid D-Bus name conflicts
 #[cfg(test)]
