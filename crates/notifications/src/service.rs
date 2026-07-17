@@ -6,7 +6,6 @@ use crate::notification::NotificationHandle;
 use crate::signals::NotificationServiceSignal;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::RwLock;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 use zbus::Connection;
@@ -14,7 +13,7 @@ use zbus::connection::Builder;
 use zbus::object_server::InterfaceRef;
 
 pub(crate) struct NotificationServiceInner {
-    pub(crate) data: RwLock<ServiceData>,
+    pub(crate) data: ServiceData,
     pub(crate) connection: Mutex<Option<Connection>>,
     pub(crate) outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>,
     pub(crate) cache_dir: Option<PathBuf>,
@@ -32,7 +31,7 @@ impl NotificationService {
     ) -> Result<Self> {
         Ok(Self {
             inner: Arc::new(NotificationServiceInner {
-                data: RwLock::new(ServiceData::new(cache_dir.clone())?),
+                data: ServiceData::new(cache_dir.clone())?,
                 connection: Mutex::new(None),
                 outer_tx,
                 cache_dir,
@@ -43,7 +42,7 @@ impl NotificationService {
     pub fn new_in_memory(outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>) -> Self {
         Self {
             inner: Arc::new(NotificationServiceInner {
-                data: RwLock::new(ServiceData::new_in_memory()),
+                data: ServiceData::new_in_memory(),
                 connection: Mutex::new(None),
                 outer_tx,
                 cache_dir: None,
@@ -84,7 +83,7 @@ impl NotificationService {
             .notification_closed(id, CloseReason::Dismissed.into())
             .await?;
 
-        self.inner.data.write().unwrap().remove_notification(id)?;
+        self.inner.data.remove_notification(id)?;
 
         Ok(())
     }
@@ -101,9 +100,7 @@ impl NotificationService {
     pub fn get_notifications(&self) -> Vec<NotificationHandle> {
         self.inner
             .data
-            .read()
-            .unwrap()
-            .notifications
+            .get_notifications()
             .values()
             .map(|n| NotificationHandle {
                 inner: Arc::clone(n),
@@ -115,9 +112,7 @@ impl NotificationService {
     pub fn get_notification_by_id(&self, id: u32) -> Option<NotificationHandle> {
         self.inner
             .data
-            .read()
-            .unwrap()
-            .notifications
+            .get_notifications()
             .get(&id)
             .map(|n| NotificationHandle {
                 inner: n.clone(),
@@ -126,14 +121,14 @@ impl NotificationService {
     }
 
     pub async fn clear_notifications(&self) -> Result<()> {
-        for id in self.inner.data.read().unwrap().notifications.keys() {
+        for id in self.inner.data.get_notifications().keys() {
             self.get_dbus_interface()
                 .await?
                 .notification_closed(id.to_owned(), CloseReason::Dismissed.into())
                 .await?;
         }
 
-        self.inner.data.write().unwrap().clear()
+        self.inner.data.clear()
     }
 }
 

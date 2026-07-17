@@ -5,67 +5,68 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
-#[derive(Serialize, Deserialize)]
-pub struct ServiceData {
-    pub counter: u32,
-    pub notifications: BTreeMap<u32, Arc<DesktopNotification>>,
+#[derive(Serialize, Deserialize, Default)]
+struct ServiceDataInner {
+    counter: u32,
+    notifications: BTreeMap<u32, Arc<DesktopNotification>>,
+}
 
-    #[serde(skip)]
-    file_path: Option<PathBuf>, // If None - no file operations
+#[derive(Default)]
+pub(crate) struct ServiceData {
+    inner: RwLock<ServiceDataInner>,
+    file_path: Option<PathBuf>, // if None - file I/O is disabled
 }
 
 impl ServiceData {
-    pub fn new(cache_dir: Option<PathBuf>) -> Result<Self> {
+    pub(crate) fn new(cache_dir: Option<PathBuf>) -> Result<Self> {
         let file_path = get_history_file_path(cache_dir)?;
 
-        let json_str = match fs::read_to_string(&file_path) {
-            Ok(s) => s,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(Self::new_empty(Some(file_path)));
-            }
+        let inner = match fs::read_to_string(&file_path) {
+            Ok(s) => serde_json::from_str(&s)?,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => ServiceDataInner::default(),
             Err(e) => return Err(e.into()),
         };
 
-        let mut obj: Self = serde_json::from_str(&json_str)?;
-        obj.file_path = Some(file_path);
-
-        Ok(obj)
+        Ok(Self {
+            inner: RwLock::new(inner),
+            file_path: Some(file_path),
+        })
     }
 
-    pub fn new_in_memory() -> Self {
-        Self::new_empty(None)
+    pub(crate) fn new_in_memory() -> Self {
+        Self::default()
     }
 
-    fn new_empty(file_path: Option<PathBuf>) -> Self {
-        Self {
-            counter: 0,
-            notifications: BTreeMap::new(),
-            file_path,
-        }
-    }
-
-    pub fn add_notification(
-        &mut self,
+    pub(crate) fn add_notification(
+        &self,
         id: u32,
         new_notification: Arc<DesktopNotification>,
         replace: bool,
     ) -> Result<()> {
         if !replace {
-            self.notifications.insert(id, new_notification);
+            self.inner
+                .write()
+                .unwrap()
+                .notifications
+                .insert(id, new_notification);
         } else {
-            if let Some(old_notification) = self.notifications.get_mut(&id) {
+            if let Some(old_notification) = self.inner.write().unwrap().notifications.get_mut(&id) {
                 *old_notification = new_notification;
             }
         }
+
         self.save_to_file()?;
 
         Ok(())
     }
 
-    pub fn remove_notification(&mut self, id: u32) -> Result<()> {
-        self.notifications
+    pub fn remove_notification(&self, id: u32) -> Result<()> {
+        self.inner
+            .write()
+            .unwrap()
+            .notifications
             .remove(&id)
             .ok_or_else(|| NotificationServiceError::NotificationNotFound(id))?;
 
@@ -73,16 +74,29 @@ impl ServiceData {
         Ok(())
     }
 
-    pub fn clear(&mut self) -> Result<()> {
-        self.notifications.clear();
-        self.counter = 0;
+    pub fn clear(&self) -> Result<()> {
+        {
+            let mut inner = self.inner.write().unwrap();
+            inner.notifications.clear();
+            inner.counter = 0;
+        }
         self.save_to_file()?;
         Ok(())
     }
 
+    pub fn get_notifications(&self) -> BTreeMap<u32, Arc<DesktopNotification>> {
+        self.inner.read().unwrap().notifications.clone()
+    }
+
+    pub fn increment_counter(&self) -> u32 {
+        let mut guard = self.inner.write().unwrap();
+        guard.counter += 1;
+        guard.counter
+    }
+
     fn save_to_file(&self) -> Result<()> {
         if let Some(file_path) = self.file_path.clone() {
-            let json_str = serde_json::to_string_pretty(self)?;
+            let json_str = serde_json::to_string_pretty(&*self.inner.read().unwrap())?;
             fs::write(&file_path, json_str)?;
         };
 

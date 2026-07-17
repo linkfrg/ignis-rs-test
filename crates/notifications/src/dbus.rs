@@ -40,7 +40,7 @@ impl DBusService {
         let id: u32 = if replace {
             replaces_id
         } else {
-            self.service.inner.data.read().unwrap().counter + 1
+            self.service.inner.data.increment_counter()
         };
 
         let mut iter = actions.into_iter();
@@ -70,16 +70,14 @@ impl DBusService {
             timeout,
         });
 
+        if let Err(e) =
+            self.service
+                .inner
+                .data
+                .add_notification(id, new_notification.clone(), replace)
         {
-            let mut data = self.service.inner.data.write().unwrap();
-            if !replace {
-                data.counter += 1;
-            }
-
-            if let Err(e) = data.add_notification(id, new_notification.clone(), replace) {
-                error!("Failed to add notification: {e}");
-            }
-        };
+            error!("Failed to add notification: {e}");
+        }
 
         let handle = NotificationHandle {
             inner: new_notification,
@@ -118,13 +116,9 @@ impl DBusService {
             .notification_closed(id, CloseReason::DBusCall.into())
             .await?;
 
-        {
-            let mut data = self.service.inner.data.write().unwrap();
-
-            if let Err(e) = data.remove_notification(id) {
-                error!("Can not remove notification: {e}");
-            }
-        };
+        if let Err(e) = self.service.inner.data.remove_notification(id) {
+            error!("Can not remove notification: {e}");
+        }
 
         if let Some(tx) = self.service.inner.outer_tx.clone()
             && let Err(e) = tx
