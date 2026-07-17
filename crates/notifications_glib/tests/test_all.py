@@ -158,7 +158,7 @@ def test_notification_properties(run_in_glib, notification_service):
     run_in_glib(test())
 
 
-def test_close_notification(run_in_glib, notification_service):
+def test_dismiss_notification(run_in_glib, notification_service):
     id_: int = -1
     closed_emitted: bool = False
 
@@ -178,7 +178,7 @@ def test_close_notification(run_in_glib, notification_service):
         latest = notification_service.get_notifications()[-1]
         id_ = latest.props.id
 
-        await notification_service.close_notification_async(id_)
+        await notification_service.dismiss_notification_async(id_)
 
     run_in_glib(test())
 

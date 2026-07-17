@@ -86,7 +86,7 @@ impl NotificationService {
             .await?)
     }
 
-    pub async fn close_notification(&self, id: u32) -> Result<()> {
+    pub async fn dismiss_notification(&self, id: u32) -> Result<()> {
         self.get_dbus_interface()
             .await?
             .notification_closed(id, CloseReason::Dismissed.into())
@@ -270,7 +270,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_close_notification() {
+    async fn test_dismiss_notification() {
         let ctx = setup().await;
         let handle = create_random_notification().show_async().await.unwrap();
         let id = handle.id();
@@ -292,8 +292,7 @@ mod tests {
         // makes the handle "miss" the signal and therefore never call the closure
         tokio::time::sleep(Duration::from_millis(1)).await;
 
-        // TODO: maybe rename it to "dismiss_notification()"..?
-        ctx.service.close_notification(id).await.unwrap();
+        ctx.service.dismiss_notification(id).await.unwrap();
 
         let close_reason = rx.await.unwrap();
         assert_eq!(close_reason, CloseReason::Dismissed);

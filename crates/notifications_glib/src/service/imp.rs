@@ -99,7 +99,7 @@ impl ObjectImpl for GNotificationServiceImp {
             while let Some(signal) = obj.imp().rx.lock().await.recv().await {
                 match signal {
                     NotificationServiceSignal::CloseNotification { id, reason } => {
-                        obj.imp().close_notification_internal(id, reason.into())
+                        obj.imp().remove_notification(id, reason.into())
                     }
                     NotificationServiceSignal::Notified {
                         id,
@@ -138,7 +138,7 @@ impl ObjectImpl for GNotificationServiceImp {
 }
 
 impl GNotificationServiceImp {
-    fn close_notification_internal(&self, id: u32, reason: GCloseReason) {
+    fn remove_notification(&self, id: u32, reason: GCloseReason) {
         let notif_store = &self.notifications;
 
         let position =
@@ -175,13 +175,13 @@ impl GNotificationServiceImp {
             .collect()
     }
 
-    pub async fn close_notification(&self, notification_id: u32) -> Result<(), glib::Error> {
+    pub async fn dismiss_notification(&self, notification_id: u32) -> Result<(), glib::Error> {
         self.service
-            .close_notification(notification_id)
+            .dismiss_notification(notification_id)
             .await
             .into_glib_error::<GNotificationServiceError>()?;
 
-        self.close_notification_internal(notification_id, GCloseReason::Dismissed);
+        self.remove_notification(notification_id, GCloseReason::Dismissed);
 
         Ok(())
     }
@@ -244,9 +244,9 @@ pub(crate) mod ffi {
     glib_async_method!(
         IgnisNotificationsGLibService,
         super::super::GNotificationService,
-        ignis_notifications_glib_service_close_notification_async,
-        ignis_notifications_glib_service_close_notification_finish,
-        close_notification,
+        ignis_notifications_glib_service_dismiss_notification_async,
+        ignis_notifications_glib_service_dismiss_notification_finish,
+        dismiss_notification,
         notification_id: u32 => { notification_id }
     );
 

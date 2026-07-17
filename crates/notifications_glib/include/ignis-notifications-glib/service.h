@@ -23,8 +23,8 @@ gboolean    ignis_notifications_glib_service_run_finish (IgnisNotificationsGLibS
  */
 GList* ignis_notifications_glib_service_get_notifications(IgnisNotificationsGLibService* self);
 
-void ignis_notifications_glib_service_close_notification_async(IgnisNotificationsGLibService* self, guint32 notification_id, GCancellable* cancellable, GAsyncReadyCallback callback, gpointer user_data);
-gboolean    ignis_notifications_glib_service_close_notification_finish (IgnisNotificationsGLibService * self, GAsyncResult *res, GError **error);
+void ignis_notifications_glib_service_dismiss_notification_async(IgnisNotificationsGLibService* self, guint32 notification_id, GCancellable* cancellable, GAsyncReadyCallback callback, gpointer user_data);
+gboolean    ignis_notifications_glib_service_dismiss_notification_finish (IgnisNotificationsGLibService * self, GAsyncResult *res, GError **error);
 
 void ignis_notifications_glib_service_invoke_action_async(IgnisNotificationsGLibService* self, guint32 notification_id, gchar* action_key, GCancellable* cancellable, GAsyncReadyCallback callback, gpointer user_data);
 gboolean    ignis_notifications_glib_service_invoke_action_finish (IgnisNotificationsGLibService * self, GAsyncResult *res, GError **error);
