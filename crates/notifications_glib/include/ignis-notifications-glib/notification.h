@@ -35,6 +35,9 @@ IgnisNotificationsGLibUrgency ignis_notifications_glib_notification_get_urgency 
 
 gint32 ignis_notifications_glib_notification_get_timeout (IgnisNotificationsGLibNotification* this); 
 
+void        ignis_notifications_glib_notification_dismiss_async  (IgnisNotificationsGLibService * self, GCancellable *cancellable, GAsyncReadyCallback callback, gpointer user_data);
+gboolean    ignis_notifications_glib_notification_dismiss_finish (IgnisNotificationsGLibService * self, GAsyncResult *res, GError **error);
+
 G_END_DECLS
 
 #endif

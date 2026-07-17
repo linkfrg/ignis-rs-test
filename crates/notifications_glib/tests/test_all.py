@@ -99,6 +99,7 @@ def test_notify(run_in_glib, notification_service):
 
         assert latest.get_summary() == summary
         assert latest.get_body() == body
+        assert hasattr(latest, "dismiss_async")
 
     run_in_glib(test())
 

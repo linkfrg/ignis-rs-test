@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
+use crate::Result;
 use crate::action::Action;
 use crate::urgency::Urgency;
 use crate::{NotificationService, action::ActionHandle};
@@ -62,5 +63,10 @@ impl NotificationHandle {
 
     pub fn timeout(&self) -> i32 {
         self.inner.timeout
+    }
+
+    pub async fn dismiss(&self) -> Result<()> {
+        self.service.dismiss_notification(self.id()).await?;
+        Ok(())
     }
 }

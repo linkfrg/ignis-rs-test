@@ -4,9 +4,11 @@ use std::sync::OnceLock;
 use gio::prelude::ListModelExt;
 use glib::prelude::*;
 use glib::subclass::prelude::*;
+use glib_utils::{IntoGLibError, glib_async_method, runtime};
 use notifications::NotificationHandle;
 
 use crate::action::GAction;
+use crate::error::GNotificationServiceError;
 use crate::urgency::GUrgency;
 
 pub struct GDesktopNotificationImp {
@@ -110,12 +112,23 @@ impl GDesktopNotificationImp {
     pub fn get_timeout(&self) -> i32 {
         self.notification.borrow().timeout()
     }
+
+    pub async fn dismiss(&self) -> Result<(), glib::Error> {
+        self.notification
+            .borrow()
+            .dismiss()
+            .await
+            .into_glib_error::<GNotificationServiceError>()?;
+
+        Ok(())
+    }
 }
 pub(crate) mod ffi {
     use crate::urgency::ffi::IgnisNotificationsGLibUrgency;
 
     use super::*;
     use glib::translate::*;
+    use std::ffi::c_void;
 
     pub type IgnisNotificationsGLibNotification =
         <super::GDesktopNotificationImp as super::ObjectSubclass>::Instance;
@@ -196,4 +209,12 @@ pub(crate) mod ffi {
         let imp = unsafe { (*this).imp() };
         imp.get_timeout()
     }
+
+    glib_async_method!(
+        IgnisNotificationsGLibNotification,
+        super::super::GDesktopNotification,
+        ignis_notifications_glib_notification_dismiss_async,
+        ignis_notifications_glib_notification_dismiss_finish,
+        dismiss,
+    );
 }
