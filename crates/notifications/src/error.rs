@@ -18,6 +18,9 @@ pub enum NotificationServiceError {
 
     #[error("No notification found with id: {0}")]
     NotificationNotFound(u32),
+
+    #[error("Attempted to initialize connection twice (run() was called twice)")]
+    ConnectionInitializedTwice,
 }
 
 pub type Result<T> = std::result::Result<T, NotificationServiceError>;

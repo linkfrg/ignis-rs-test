@@ -6,7 +6,7 @@ use crate::notification::NotificationHandle;
 use crate::signals::NotificationServiceSignal;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::OnceLock;
 use tokio::sync::mpsc;
 use zbus::Connection;
 use zbus::connection::Builder;
@@ -14,7 +14,7 @@ use zbus::object_server::InterfaceRef;
 
 pub(crate) struct NotificationServiceInner {
     pub(crate) data: ServiceData,
-    pub(crate) connection: Mutex<Option<Connection>>,
+    pub(crate) connection: OnceLock<Option<Connection>>,
     pub(crate) outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>,
     pub(crate) cache_dir: Option<PathBuf>,
 }
@@ -32,7 +32,7 @@ impl NotificationService {
         Ok(Self {
             inner: Arc::new(NotificationServiceInner {
                 data: ServiceData::new(cache_dir.clone())?,
-                connection: Mutex::new(None),
+                connection: OnceLock::new(),
                 outer_tx,
                 cache_dir,
             }),
@@ -43,7 +43,7 @@ impl NotificationService {
         Self {
             inner: Arc::new(NotificationServiceInner {
                 data: ServiceData::new_in_memory(),
-                connection: Mutex::new(None),
+                connection: OnceLock::new(),
                 outer_tx,
                 cache_dir: None,
             }),
@@ -59,19 +59,27 @@ impl NotificationService {
             .build()
             .await?;
 
-        *self.inner.connection.lock().await = Some(connection);
+        self.inner
+            .connection
+            .set(Some(connection))
+            .map_err(|_| NotificationServiceError::ConnectionInitializedTwice)?;
 
         Ok(())
     }
 
-    async fn get_dbus_interface(&self) -> Result<InterfaceRef<DBusService>> {
+    pub(crate) fn get_connection(&self) -> Result<Connection> {
         Ok(self
             .inner
             .connection
-            .lock()
-            .await
-            .as_ref()
+            .get()
             .ok_or(NotificationServiceError::NoConnection)?
+            .to_owned()
+            .ok_or(NotificationServiceError::NoConnection)?)
+    }
+
+    async fn get_dbus_interface(&self) -> Result<InterfaceRef<DBusService>> {
+        Ok(self
+            .get_connection()?
             .object_server()
             .interface("/org/freedesktop/Notifications")
             .await?)
