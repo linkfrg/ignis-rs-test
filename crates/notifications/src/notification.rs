@@ -8,7 +8,7 @@ use crate::urgency::Urgency;
 use crate::{NotificationService, action::ActionHandle};
 
 #[derive(Serialize, Deserialize, Default)]
-pub(crate) struct DesktopNotification {
+pub(crate) struct Notification {
     pub(crate) id: u32,
     pub(crate) app_name: String,
     pub(crate) icon: Option<String>,
@@ -21,7 +21,7 @@ pub(crate) struct DesktopNotification {
 
 #[derive(Clone, Default)]
 pub struct NotificationHandle {
-    pub(crate) inner: Arc<DesktopNotification>,
+    pub(crate) inner: Arc<Notification>,
     pub(crate) service: NotificationService,
 }
 

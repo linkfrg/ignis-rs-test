@@ -5,7 +5,7 @@ use crate::NotificationServiceSignal;
 use crate::Result;
 use crate::action::Action;
 use crate::file_utils::get_image_dir;
-use crate::notification::DesktopNotification;
+use crate::notification::Notification;
 use gdk_pixbuf::{Colorspace, Pixbuf};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -55,7 +55,7 @@ impl DBusService {
             }))
         }
 
-        let new_notification = Arc::new(DesktopNotification {
+        let new_notification = Arc::new(Notification {
             id,
             app_name: app_name.to_string(),
             icon: self.get_icon(app_icon, &hints, id),

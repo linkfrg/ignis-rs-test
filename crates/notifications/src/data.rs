@@ -1,5 +1,5 @@
 use crate::file_utils::get_history_file_path;
-use crate::notification::DesktopNotification;
+use crate::notification::Notification;
 use crate::{NotificationServiceError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -10,7 +10,7 @@ use std::sync::{Arc, RwLock};
 #[derive(Serialize, Deserialize, Default)]
 struct ServiceDataInner {
     counter: u32,
-    notifications: BTreeMap<u32, Arc<DesktopNotification>>,
+    notifications: BTreeMap<u32, Arc<Notification>>,
 }
 
 #[derive(Default)]
@@ -42,7 +42,7 @@ impl ServiceData {
     pub(crate) fn add_notification(
         &self,
         id: u32,
-        new_notification: Arc<DesktopNotification>,
+        new_notification: Arc<Notification>,
         replace: bool,
     ) -> Result<()> {
         if !replace {
@@ -84,7 +84,7 @@ impl ServiceData {
         Ok(())
     }
 
-    pub fn get_notifications(&self) -> BTreeMap<u32, Arc<DesktopNotification>> {
+    pub fn get_notifications(&self) -> BTreeMap<u32, Arc<Notification>> {
         self.inner.read().unwrap().notifications.clone()
     }
 
