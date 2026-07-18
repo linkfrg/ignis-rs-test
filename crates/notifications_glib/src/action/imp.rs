@@ -8,7 +8,7 @@ use glib_utils::glib_async_method;
 use glib_utils::runtime;
 use notifications::ActionHandle;
 
-use crate::error::GNotificationServiceError;
+use crate::error::GError;
 
 #[derive(Default)]
 pub struct GActionImp {
@@ -65,7 +65,7 @@ impl GActionImp {
             .borrow()
             .invoke()
             .await
-            .into_glib_error::<GNotificationServiceError>()
+            .into_glib_error::<GError>()
     }
 }
 pub(crate) mod ffi {

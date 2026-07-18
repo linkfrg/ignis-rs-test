@@ -1,5 +1,5 @@
 use crate::close_reason::GCloseReason;
-use crate::error::GNotificationServiceError;
+use crate::error::GError;
 use crate::notification::GDesktopNotification;
 use gio::prelude::ListModelExt;
 use glib::prelude::*;
@@ -155,10 +155,7 @@ impl GNotificationServiceImp {
         }
     }
     pub async fn run_async(&self) -> Result<(), glib::Error> {
-        self.service
-            .run()
-            .await
-            .into_glib_error::<GNotificationServiceError>()?;
+        self.service.run().await.into_glib_error::<GError>()?;
 
         Ok(())
     }
@@ -179,7 +176,7 @@ impl GNotificationServiceImp {
         self.service
             .dismiss_notification(notification_id)
             .await
-            .into_glib_error::<GNotificationServiceError>()?;
+            .into_glib_error::<GError>()?;
 
         self.remove_notification(notification_id, GCloseReason::Dismissed);
 
@@ -194,7 +191,7 @@ impl GNotificationServiceImp {
         self.service
             .invoke_action(notification_id, action_key)
             .await
-            .into_glib_error::<GNotificationServiceError>()
+            .into_glib_error::<GError>()
     }
 
     pub async fn clear_notifications(&self) -> Result<(), glib::Error> {
@@ -204,7 +201,7 @@ impl GNotificationServiceImp {
         self.service
             .clear_notifications()
             .await
-            .into_glib_error::<GNotificationServiceError>()?;
+            .into_glib_error::<GError>()?;
 
         self.notifications.remove_all();
         self.obj()

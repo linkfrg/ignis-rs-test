@@ -8,7 +8,7 @@ use glib_utils::{IntoGLibError, glib_async_method, runtime};
 use notifications::NotificationHandle;
 
 use crate::action::GAction;
-use crate::error::GNotificationServiceError;
+use crate::error::GError;
 use crate::urgency::GUrgency;
 
 pub struct GDesktopNotificationImp {
@@ -118,7 +118,7 @@ impl GDesktopNotificationImp {
             .borrow()
             .dismiss()
             .await
-            .into_glib_error::<GNotificationServiceError>()?;
+            .into_glib_error::<GError>()?;
 
         Ok(())
     }
