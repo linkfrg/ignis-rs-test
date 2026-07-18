@@ -40,7 +40,7 @@ impl ActionHandle {
     /// It is a shortcut to [`NotificationService::invoke_action`].
     ///
     /// # Errors
-    /// Returns [`NotificationServiceError::DBusError`]
+    /// Returns [`Error::DBusError`]
     pub async fn invoke(&self) -> Result<()> {
         self.service
             .invoke_action(self.inner.notification_id, &self.inner.action_key)

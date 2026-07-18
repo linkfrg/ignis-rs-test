@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-/// Enum representing possible errors to happen during the usage of [`NotificationService`]
+/// Enum representing possible errors to happen during the usage of [`crate::NotificationService`].
 #[derive(Error, Debug)]
 pub enum Error {
     /// D-Bus error. Carries [`zbus::Error`] inside.
@@ -10,7 +10,7 @@ pub enum Error {
     DBusError(#[from] zbus::Error),
 
     /// Returned if attempted to call methods that involve D-Bus interaction and have not called
-    /// [`NotificationService::run`] yet.
+    /// [`crate::NotificationService::run`] yet.
     #[error("Connection not exist error")]
     NoConnection,
 
@@ -30,10 +30,10 @@ pub enum Error {
     #[error("No notification found with id: {0}")]
     NotificationNotFound(u32),
 
-    /// Returned if [`NotificationService::run`] is called more than once.
+    /// Returned if [`crate::NotificationService::run`] is called more than once.
     #[error("Attempted to initialize connection twice (run() was called twice)")]
     ConnectionInitializedTwice,
 }
 
-/// Alias for a [`std::result::Result`] with the error type [`notifications::NotificationServiceError`].
+/// Alias for a [`std::result::Result`] with the error type [`crate::Error`].
 pub type Result<T> = std::result::Result<T, Error>;

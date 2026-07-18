@@ -32,7 +32,7 @@ impl NotificationService {
     /// * `cache_dir` - Overrides the default cache directory located at `~/.cache/ignis_notifications`.
     ///
     /// # Errors
-    /// Returns [`NotificationServiceError::IOError`] if loading notification history from file
+    /// Returns [`Error::IOError`] if loading notification history from file
     /// fails.
     pub fn new(
         outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>,
@@ -74,9 +74,9 @@ impl NotificationService {
     /// Must be called only once.
     ///
     /// # Errors
-    /// Returns [`NotificationServiceError::DBusError`], for example, if the name is already taken on the bus.
+    /// Returns [`Error::DBusError`], for example, if the name is already taken on the bus.
     ///
-    /// Returns [`NotificationServiceError::ConnectionInitializedTwice`] if this function is called
+    /// Returns [`Error::ConnectionInitializedTwice`] if this function is called
     /// more than once.
     pub async fn run(&self) -> Result<()> {
         let service = DBusService::new(self.clone())?;
@@ -118,9 +118,9 @@ impl NotificationService {
     /// The notification is removed from the history and application that sent the notification is notified through D-Bus.
     ///
     /// # Errors
-    /// Returns [`NotificationServiceError::DBusError`].
+    /// Returns [`Error::DBusError`].
     ///
-    /// Returns [`NotificationServiceError::NotificationNotFound`] if the notification with such ID is
+    /// Returns [`Error::NotificationNotFound`] if the notification with such ID is
     /// not found.
     pub async fn dismiss_notification(&self, id: u32) -> Result<()> {
         self.get_dbus_interface()
@@ -136,7 +136,7 @@ impl NotificationService {
     /// Invokes an action by its action key and notification ID it belongs to.
     ///
     /// # Errors
-    /// Returns [`NotificationServiceError::DBusError`].
+    /// Returns [`Error::DBusError`].
     pub async fn invoke_action(&self, notification_id: u32, action_key: &str) -> Result<()> {
         self.get_dbus_interface()
             .await?
