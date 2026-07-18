@@ -1,3 +1,18 @@
+//! # notifications
+//! `notifications` provides a notification daemon which receives and manages notifications sent by
+//! applications on GNU/Linux desktops that follow XDG Desktop Notifications Specification.
+//!
+//! ## Example
+//! ```rust
+//! use notifications::NotificationService;
+//!
+//! let service = NotificationService::new();
+//! service.run().await.unwrap();
+//!
+//! ```
+
+#![warn(missing_docs)]
+
 mod action;
 mod close_reason;
 mod data;

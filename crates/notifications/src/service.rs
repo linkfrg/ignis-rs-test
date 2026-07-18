@@ -20,12 +20,25 @@ pub(crate) struct NotificationServiceInner {
     pub(crate) cache_dir: Option<PathBuf>,
 }
 
+/// A notification daemon that follows XDG Desktop Notifications Specification.
+///
+/// [`NotificationService`] implements [`Clone`] and can be cloned cheapely since underlying data is
+/// shared.
 #[derive(Default, Clone)]
 pub struct NotificationService {
     pub(crate) inner: Arc<NotificationServiceInner>,
 }
 
 impl NotificationService {
+    /// Creates a new instance of the service loading the notification history from file.
+    ///
+    /// # Arguments
+    /// * `outer_tx` - An instance of [`tokio::sync::mpsc::Sender`] which receives D-Bus events.
+    /// * `cache_dir` - Overrides the default cache directory located at `~/.cache/ignis_notifications`.
+    ///
+    /// # Errors
+    /// Returns [`NotificationServiceError::IOError`] if loading notification history from file
+    /// fails.
     pub fn new(
         outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>,
         cache_dir: Option<PathBuf>,
@@ -40,6 +53,13 @@ impl NotificationService {
         })
     }
 
+    /// Creates a new instance of the service without any I/O operations.
+    ///
+    /// It doesn't load the notification history from file and doesn't save it consequently.
+    /// This method can not fail and is guaranteed to return the instance.
+    ///
+    /// # Arguments
+    /// * `outer_tx` - An instance of [`tokio::sync::mpsc::Sender`] which receives D-Bus events.
     pub fn new_in_memory(outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>) -> Self {
         Self {
             inner: Arc::new(NotificationServiceInner {
@@ -51,6 +71,18 @@ impl NotificationService {
         }
     }
 
+    /// Runs the service.
+    ///
+    /// You have to call this this method in order to receive notifications and perform operations
+    /// on them, such as dismissing or invoking actions.
+    /// It creates D-Bus connection and registers D-Bus interface on the session bus.
+    /// Must be called only once.
+    ///
+    /// # Errors
+    /// Returns [`NotificationServiceError::DBusError`], for example, if the name is already taken on the bus.
+    ///
+    /// Returns [`NotificationServiceError::ConnectionInitializedTwice`] if this function is called
+    /// more than once.
     pub async fn run(&self) -> Result<()> {
         let service = DBusService::new(self.clone())?;
 
@@ -86,6 +118,15 @@ impl NotificationService {
             .await?)
     }
 
+    /// Dismiss a notification by its ID.
+    ///
+    /// The notification is removed from the history and application that sent the notification is notified through D-Bus.
+    ///
+    /// # Errors
+    /// Returns [`NotificationServiceError::DBusError`].
+    ///
+    /// Returns [`NotificationServiceError::NotificationNotFound`] if the notification with such ID is
+    /// not found.
     pub async fn dismiss_notification(&self, id: u32) -> Result<()> {
         self.get_dbus_interface()
             .await?
@@ -97,6 +138,10 @@ impl NotificationService {
         Ok(())
     }
 
+    /// Invokes an action by its action key and notification ID it belongs to.
+    ///
+    /// # Errors
+    /// Returns [`NotificationServiceError::DBusError`].
     pub async fn invoke_action(&self, notification_id: u32, action_key: &str) -> Result<()> {
         self.get_dbus_interface()
             .await?
@@ -106,6 +151,7 @@ impl NotificationService {
         Ok(())
     }
 
+    /// Returns a vector of notification handles.
     pub fn get_notifications(&self) -> Vec<NotificationHandle> {
         self.inner
             .data
@@ -118,6 +164,7 @@ impl NotificationService {
             .collect()
     }
 
+    /// Returns a notification handle by notification ID.
     pub fn get_notification_by_id(&self, id: u32) -> Option<NotificationHandle> {
         self.inner
             .data
@@ -129,6 +176,9 @@ impl NotificationService {
             })
     }
 
+    /// Clears the notification history.
+    ///
+    /// It dismisses each notification and notifies applications.
     pub async fn clear_notifications(&self) -> Result<()> {
         for id in self.inner.data.get_notifications().keys() {
             self.get_dbus_interface()
