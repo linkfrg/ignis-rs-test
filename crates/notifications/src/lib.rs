@@ -20,6 +20,7 @@ mod dbus;
 mod error;
 mod file_utils;
 mod notification;
+mod private_prelude;
 mod service;
 mod signals;
 mod urgency;

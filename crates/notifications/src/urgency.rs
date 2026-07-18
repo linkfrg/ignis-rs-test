@@ -1,5 +1,4 @@
-use serde::{Deserialize, Serialize};
-
+use crate::private_prelude::*;
 /// The urgency level of the notification.
 ///
 /// Represents how important is the notification and may affect how it's displayed in the graphical

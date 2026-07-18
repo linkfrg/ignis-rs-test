@@ -1,11 +1,7 @@
-use crate::file_utils::get_history_file_path;
-use crate::notification::Notification;
-use crate::{Error, Result};
-use serde::{Deserialize, Serialize};
+use crate::private_prelude::*;
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+use std::sync::RwLock;
 
 #[derive(Serialize, Deserialize, Default)]
 struct ServiceDataInner {
@@ -21,7 +17,7 @@ pub(crate) struct ServiceData {
 
 impl ServiceData {
     pub(crate) fn new(cache_dir: Option<PathBuf>) -> Result<Self> {
-        let file_path = get_history_file_path(cache_dir)?;
+        let file_path = file_utils::get_history_file_path(cache_dir)?;
 
         let inner = match fs::read_to_string(&file_path) {
             Ok(s) => serde_json::from_str(&s)?,

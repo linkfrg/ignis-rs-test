@@ -1,5 +1,4 @@
-use crate::CloseReason;
-use crate::NotificationHandle;
+use crate::private_prelude::*;
 
 // NOTE: These signals are intended to alert consumers from outside (e.g, from D-Bus)
 // If the action is requested by user directly (by calling a corresponding function)

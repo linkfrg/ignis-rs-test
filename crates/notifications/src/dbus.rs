@@ -1,15 +1,6 @@
-use crate::CloseReason;
-use crate::NotificationHandle;
-use crate::NotificationService;
-use crate::NotificationServiceSignal;
-use crate::Result;
-use crate::action::Action;
-use crate::file_utils::get_image_dir;
-use crate::notification::Notification;
+use crate::private_prelude::*;
 use gdk_pixbuf::{Colorspace, Pixbuf};
 use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::Arc;
 use tracing::error;
 use zbus::fdo;
 use zbus::object_server::SignalEmitter;
@@ -157,7 +148,7 @@ impl DBusService {
 impl DBusService {
     pub fn new(service: NotificationService) -> Result<Self> {
         Ok(Self {
-            image_dir: get_image_dir(service.inner.cache_dir.clone())?,
+            image_dir: file_utils::get_image_dir(service.inner.cache_dir.clone())?,
             service,
         })
     }

@@ -1,11 +1,4 @@
-use std::sync::Arc;
-
-use serde::{Deserialize, Serialize};
-
-use crate::Result;
-use crate::action::Action;
-use crate::urgency::Urgency;
-use crate::{NotificationService, action::ActionHandle};
+use crate::private_prelude::*;
 
 #[derive(Serialize, Deserialize, Default)]
 pub(crate) struct Notification {

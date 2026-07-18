@@ -1,11 +1,6 @@
-use crate::CloseReason;
 use crate::data::ServiceData;
 use crate::dbus::{DBusService, DBusServiceSignals};
-use crate::error::{Error, Result};
-use crate::notification::NotificationHandle;
-use crate::signals::NotificationServiceSignal;
-use std::path::PathBuf;
-use std::sync::Arc;
+use crate::private_prelude::*;
 use std::sync::OnceLock;
 use tokio::sync::mpsc;
 use zbus::Connection;
