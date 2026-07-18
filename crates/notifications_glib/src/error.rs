@@ -1,5 +1,3 @@
-use notifications::NotificationServiceError;
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq, glib::ErrorDomain)]
 #[error_domain(name = "ignis-notifications-glib-error")]
 pub enum GNotificationServiceError {
@@ -11,17 +9,17 @@ pub enum GNotificationServiceError {
     ConnectionInitializedTwice,
 }
 
-impl From<&NotificationServiceError> for GNotificationServiceError {
-    fn from(e: &NotificationServiceError) -> Self {
+impl From<&notifications::Error> for GNotificationServiceError {
+    fn from(e: &notifications::Error) -> Self {
         match e {
-            NotificationServiceError::NoConnection => GNotificationServiceError::NoConnection,
-            NotificationServiceError::DBusError(_) => GNotificationServiceError::DBusError,
-            NotificationServiceError::IOError(_) => GNotificationServiceError::IOError,
-            NotificationServiceError::JSONError(_) => GNotificationServiceError::JSONError,
-            NotificationServiceError::NotificationNotFound(_) => {
+            notifications::Error::NoConnection => GNotificationServiceError::NoConnection,
+            notifications::Error::DBusError(_) => GNotificationServiceError::DBusError,
+            notifications::Error::IOError(_) => GNotificationServiceError::IOError,
+            notifications::Error::JSONError(_) => GNotificationServiceError::JSONError,
+            notifications::Error::NotificationNotFound(_) => {
                 GNotificationServiceError::NotificationNotFound
             }
-            NotificationServiceError::ConnectionInitializedTwice => {
+            notifications::Error::ConnectionInitializedTwice => {
                 GNotificationServiceError::ConnectionInitializedTwice
             }
         }

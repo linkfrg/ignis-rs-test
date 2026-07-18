@@ -2,7 +2,7 @@ use thiserror::Error;
 
 /// Enum representing possible errors to happen during the usage of [`NotificationService`]
 #[derive(Error, Debug)]
-pub enum NotificationServiceError {
+pub enum Error {
     /// D-Bus error. Carries [`zbus::Error`] inside.
     ///
     /// Usually returned if another notification daemon is running on the session bus.
@@ -36,4 +36,4 @@ pub enum NotificationServiceError {
 }
 
 /// Alias for a [`std::result::Result`] with the error type [`notifications::NotificationServiceError`].
-pub type Result<T> = std::result::Result<T, NotificationServiceError>;
+pub type Result<T> = std::result::Result<T, Error>;

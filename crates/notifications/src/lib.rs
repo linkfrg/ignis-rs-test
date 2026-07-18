@@ -26,7 +26,7 @@ mod urgency;
 
 pub use action::ActionHandle;
 pub use close_reason::CloseReason;
-pub use error::{NotificationServiceError, Result};
+pub use error::{Error, Result};
 pub use notification::NotificationHandle;
 pub use service::NotificationService;
 pub use signals::NotificationServiceSignal;

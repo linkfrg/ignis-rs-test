@@ -1,7 +1,7 @@
 use crate::CloseReason;
 use crate::data::ServiceData;
 use crate::dbus::{DBusService, DBusServiceSignals};
-use crate::error::{NotificationServiceError, Result};
+use crate::error::{Error, Result};
 use crate::notification::NotificationHandle;
 use crate::signals::NotificationServiceSignal;
 use std::path::PathBuf;
@@ -95,7 +95,7 @@ impl NotificationService {
         self.inner
             .connection
             .set(Some(connection))
-            .map_err(|_| NotificationServiceError::ConnectionInitializedTwice)?;
+            .map_err(|_| Error::ConnectionInitializedTwice)?;
 
         Ok(())
     }
@@ -105,9 +105,9 @@ impl NotificationService {
             .inner
             .connection
             .get()
-            .ok_or(NotificationServiceError::NoConnection)?
+            .ok_or(Error::NoConnection)?
             .to_owned()
-            .ok_or(NotificationServiceError::NoConnection)?)
+            .ok_or(Error::NoConnection)?)
     }
 
     async fn get_dbus_interface(&self) -> Result<InterfaceRef<DBusService>> {

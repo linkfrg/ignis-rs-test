@@ -1,6 +1,6 @@
 use crate::file_utils::get_history_file_path;
 use crate::notification::Notification;
-use crate::{NotificationServiceError, Result};
+use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
@@ -68,7 +68,7 @@ impl ServiceData {
             .unwrap()
             .notifications
             .remove(&id)
-            .ok_or_else(|| NotificationServiceError::NotificationNotFound(id))?;
+            .ok_or_else(|| Error::NotificationNotFound(id))?;
 
         self.save_to_file()?;
         Ok(())
