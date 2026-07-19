@@ -1,5 +1,5 @@
 /// A reason why the notification is closed.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum CloseReason {
     /// Expired timeout. The notification was closed automatically upon expiration of the timeout.
     Expired,
