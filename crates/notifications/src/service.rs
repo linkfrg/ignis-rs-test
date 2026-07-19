@@ -198,8 +198,9 @@ mod tests {
 
     use fake::Fake;
     use fake::faker::lorem::en::Sentence;
-    use notify_rust::Urgency as ClientUrgency;
+    use image::{ImageBuffer, Rgba};
     use notify_rust::{CloseReason, Notification, NotificationHandle, NotificationResponse};
+    use notify_rust::{Image, Urgency as ClientUrgency};
     use rand::seq::IndexedRandom;
     use tempfile::TempDir;
     use tokio::sync::oneshot;
@@ -399,7 +400,32 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_image_data() {}
+    async fn test_image_data() {
+        let ctx = setup().await;
+
+        let width = 64;
+        let height = 64;
+
+        let img_buffer =
+            ImageBuffer::<Rgba<u8>, _>::from_pixel(width, height, Rgba([255, 255, 255, 255]));
+
+        let img = Image::from_rgba(width as i32, height as i32, img_buffer.into_raw()).unwrap();
+
+        let client_handle = create_random_notification()
+            .image_data(img)
+            .show_async()
+            .await
+            .unwrap();
+
+        let handle = ctx
+            .service
+            .get_notification_by_id(client_handle.id())
+            .unwrap();
+
+        let path = PathBuf::from(handle.icon().unwrap());
+
+        assert!(path.exists());
+    }
 
     #[tokio::test]
     async fn test_timeout() {}

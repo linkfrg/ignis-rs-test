@@ -19,5 +19,6 @@ zvariant = { version = "5.8.0", features = ["arrayvec"] }
 [dev-dependencies]
 fake = "5.1.0"
 rand = "0.10.2"
-notify-rust = "4"
+notify-rust = { version = "4", features = ["images_no_default_features"] } 
 tempfile = "3.27.0"
+image = "0.25.10"
