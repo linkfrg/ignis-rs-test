@@ -75,17 +75,11 @@ impl DBusService {
             service: self.service.clone(),
         };
 
-        if let Some(tx) = self.service.inner.outer_tx.clone()
-            && let Err(e) = tx
-                .send(NotificationServiceSignal::Notified {
-                    id,
-                    notification: handle,
-                    replace,
-                })
-                .await
-        {
-            error!("Failed to send Notified: {e}");
-        }
+        let _ = self.service.inner.tx.send(Event::Notified {
+            id,
+            notification: handle,
+            replace,
+        });
 
         id
     }
@@ -111,16 +105,10 @@ impl DBusService {
             error!("Can not remove notification: {e}");
         }
 
-        if let Some(tx) = self.service.inner.outer_tx.clone()
-            && let Err(e) = tx
-                .send(NotificationServiceSignal::CloseNotification {
-                    id,
-                    reason: CloseReason::DBusCall,
-                })
-                .await
-        {
-            error!("Failed to send CloseNotification: {e}");
-        }
+        let _ = self.service.inner.tx.send(Event::NotificationClosed {
+            id,
+            reason: CloseReason::DBusCall,
+        });
 
         Ok(())
     }

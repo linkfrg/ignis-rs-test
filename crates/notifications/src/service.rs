@@ -2,16 +2,16 @@ use crate::data::ServiceData;
 use crate::dbus::{DBusService, DBusServiceSignals};
 use crate::private_prelude::*;
 use std::sync::OnceLock;
-use tokio::sync::mpsc;
+use tokio::sync::broadcast;
 use zbus::Connection;
 use zbus::connection::Builder;
 use zbus::object_server::InterfaceRef;
 
-#[derive(Default)]
+#[derive(Debug)]
 pub(crate) struct NotificationServiceInner {
     pub(crate) data: ServiceData,
     pub(crate) connection: OnceLock<Option<Connection>>,
-    pub(crate) outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>,
+    pub(crate) tx: broadcast::Sender<Event>,
     pub(crate) cache_dir: Option<PathBuf>,
 }
 
@@ -19,30 +19,25 @@ pub(crate) struct NotificationServiceInner {
 ///
 /// [`NotificationService`] implements [`Clone`] and can be cloned cheapely since underlying data is
 /// shared.
-#[derive(Default, Clone)]
+#[derive(Clone, Debug)]
 pub struct NotificationService {
     pub(crate) inner: Arc<NotificationServiceInner>,
 }
 
 impl NotificationService {
     /// Creates a new instance of the service loading the notification history from file.
-    ///
-    /// # Arguments
-    /// * `outer_tx` - An instance of [`tokio::sync::mpsc::Sender`] which receives D-Bus events.
     /// * `cache_dir` - Overrides the default cache directory located at `~/.cache/ignis_notifications`.
     ///
     /// # Errors
     /// Returns [`Error::IOError`] if loading notification history from file
     /// fails.
-    pub fn new(
-        outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>,
-        cache_dir: Option<PathBuf>,
-    ) -> Result<Self> {
+    pub fn new(cache_dir: Option<PathBuf>) -> Result<Self> {
+        let (tx, _) = broadcast::channel(64);
         Ok(Self {
             inner: Arc::new(NotificationServiceInner {
                 data: ServiceData::new(cache_dir.clone())?,
                 connection: OnceLock::new(),
-                outer_tx,
+                tx,
                 cache_dir,
             }),
         })
@@ -52,18 +47,21 @@ impl NotificationService {
     ///
     /// It doesn't load the notification history from file and doesn't save it consequently.
     /// This method can not fail and is guaranteed to return the instance.
-    ///
-    /// # Arguments
-    /// * `outer_tx` - An instance of [`tokio::sync::mpsc::Sender`] which receives D-Bus events.
-    pub fn new_in_memory(outer_tx: Option<mpsc::Sender<NotificationServiceSignal>>) -> Self {
+    pub fn new_in_memory() -> Self {
+        let (tx, _) = broadcast::channel(64);
         Self {
             inner: Arc::new(NotificationServiceInner {
                 data: ServiceData::new_in_memory(),
                 connection: OnceLock::new(),
-                outer_tx,
+                tx,
                 cache_dir: None,
             }),
         }
+    }
+
+    /// Returns an instance of event receiver.
+    pub fn subscribe(&self) -> broadcast::Receiver<Event> {
+        self.inner.tx.subscribe()
     }
 
     /// Runs the service.
@@ -116,6 +114,7 @@ impl NotificationService {
     /// Dismiss a notification by its ID.
     ///
     /// The notification is removed from the history and application that sent the notification is notified through D-Bus.
+    /// Emits [`Event::NotificationClosed`] event.
     ///
     /// # Errors
     /// Returns [`Error::DBusError`].
@@ -129,6 +128,11 @@ impl NotificationService {
             .await?;
 
         self.inner.data.remove_notification(id)?;
+
+        let _ = self.inner.tx.send(Event::NotificationClosed {
+            id,
+            reason: CloseReason::Dismissed,
+        });
 
         Ok(())
     }
@@ -174,6 +178,9 @@ impl NotificationService {
     /// Clears the notification history.
     ///
     /// It dismisses each notification and notifies applications.
+    ///
+    /// # Warning
+    /// It does **NOT** emit [`Event::NotificationClosed`] event for each notification.
     pub async fn clear_notifications(&self) -> Result<()> {
         for id in self.inner.data.get_notifications().keys() {
             self.get_dbus_interface()
@@ -262,7 +269,7 @@ mod tests {
             temp_dir.disable_cleanup(true);
         }
 
-        let service = NotificationService::new(None, Some(temp_dir.path().to_path_buf())).unwrap();
+        let service = NotificationService::new(Some(temp_dir.path().to_path_buf())).unwrap();
         service.run().await.unwrap();
 
         TestContext {

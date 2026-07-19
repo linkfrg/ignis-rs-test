@@ -6,29 +6,24 @@ use glib::prelude::*;
 use glib::subclass::{Signal, prelude::*};
 use glib::translate::*;
 use glib_utils::{IntoGLibError, glib_async_method, runtime};
-use notifications::NotificationServiceSignal;
+use notifications::Event;
 use std::sync::OnceLock;
-use tokio::sync::{Mutex, mpsc};
 
 pub struct GNotificationServiceImp {
     pub service: notifications::NotificationService,
     pub notifications: gio::ListStore,
-    rx: Mutex<mpsc::Receiver<NotificationServiceSignal>>,
 }
 
 impl Default for GNotificationServiceImp {
     fn default() -> Self {
-        let (tx, rx) = mpsc::channel::<NotificationServiceSignal>(32);
-
         let _guard = runtime().enter();
-        let service = notifications::NotificationService::new(Some(tx.clone()), None)
-            .unwrap_or_else(|e| {
-                glib::g_error!(
-                    "ignis-notifications-glib",
-                    "Failed to initialize Rust Service! Falling back, file I/O is disabled: {e}"
-                );
-                notifications::NotificationService::new_in_memory(Some(tx))
-            });
+        let service = notifications::NotificationService::new(None).unwrap_or_else(|e| {
+            glib::g_error!(
+                "ignis-notifications-glib",
+                "Failed to initialize Rust Service! Falling back, file I/O is disabled: {e}"
+            );
+            notifications::NotificationService::new_in_memory()
+        });
 
         let notifications = gio::ListStore::new::<GDesktopNotification>();
         let initial_notifications = service.get_notifications();
@@ -42,7 +37,6 @@ impl Default for GNotificationServiceImp {
         Self {
             service,
             notifications,
-            rx: Mutex::new(rx),
         }
     }
 }
@@ -96,12 +90,12 @@ impl ObjectImpl for GNotificationServiceImp {
         glib::MainContext::default().spawn_local(async move {
             let notif_store = &obj.imp().notifications;
 
-            while let Some(signal) = obj.imp().rx.lock().await.recv().await {
+            while let Some(signal) = obj.imp().service.subscribe().recv().await.ok() {
                 match signal {
-                    NotificationServiceSignal::CloseNotification { id, reason } => {
+                    Event::NotificationClosed { id, reason } => {
                         obj.imp().remove_notification(id, reason.into())
                     }
-                    NotificationServiceSignal::Notified {
+                    Event::Notified {
                         id,
                         notification,
                         replace,

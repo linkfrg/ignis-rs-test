@@ -10,7 +10,10 @@ impl GAction {
     pub(crate) fn new_from_rust(action: notifications::ActionHandle) -> Self {
         let obj: Self = glib::Object::builder().build();
 
-        obj.imp().action.replace(action);
+        obj.imp()
+            .action
+            .set(action)
+            .expect("Failed to set ActionHandle");
 
         obj
     }

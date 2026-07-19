@@ -3,9 +3,8 @@ use crate::private_prelude::*;
 ///
 /// Represents how important is the notification and may affect how it's displayed in the graphical
 /// interface.
-#[derive(Copy, Clone, Serialize, Deserialize, Default)]
+#[derive(Copy, Clone, Serialize, Deserialize, Debug)]
 pub enum Urgency {
-    #[default]
     /// A low level of urgency.
     ///
     /// Notification does not require immediate user attention.

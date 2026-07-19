@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::sync::OnceLock;
 
 use gio::prelude::ListModelExt;
@@ -12,14 +11,14 @@ use crate::error::GError;
 use crate::urgency::GUrgency;
 
 pub struct GDesktopNotificationImp {
-    pub notification: RefCell<NotificationHandle>,
+    pub notification: OnceLock<NotificationHandle>,
     pub(crate) actions: gio::ListStore,
 }
 
 impl Default for GDesktopNotificationImp {
     fn default() -> Self {
         Self {
-            notification: RefCell::new(NotificationHandle::default()),
+            notification: OnceLock::new(),
             actions: gio::ListStore::new::<GAction>(),
         }
     }
@@ -72,24 +71,30 @@ impl ObjectImpl for GDesktopNotificationImp {
     }
 }
 impl GDesktopNotificationImp {
+    fn get_handle(&self) -> NotificationHandle {
+        self.notification
+            .get()
+            .expect("Inner NotificationHandle is empty. This object was initialized incorrectly!")
+            .clone()
+    }
     pub fn get_id(&self) -> u32 {
-        self.notification.borrow().id()
+        self.get_handle().id()
     }
 
     pub fn get_app_name(&self) -> String {
-        self.notification.borrow().app_name().clone()
+        self.get_handle().app_name().clone()
     }
 
     pub fn get_icon(&self) -> Option<String> {
-        self.notification.borrow().icon().clone()
+        self.get_handle().icon().clone()
     }
 
     pub fn get_summary(&self) -> String {
-        self.notification.borrow().summary().clone()
+        self.get_handle().summary().clone()
     }
 
     pub fn get_body(&self) -> String {
-        self.notification.borrow().body().clone()
+        self.get_handle().body().clone()
     }
 
     pub fn get_actions(&self) -> Vec<GAction> {
@@ -106,16 +111,15 @@ impl GDesktopNotificationImp {
     }
 
     pub fn get_urgency(&self) -> GUrgency {
-        self.notification.borrow().urgency().into()
+        self.get_handle().urgency().into()
     }
 
     pub fn get_timeout(&self) -> i32 {
-        self.notification.borrow().timeout()
+        self.get_handle().timeout()
     }
 
     pub async fn dismiss(&self) -> Result<(), glib::Error> {
-        self.notification
-            .borrow()
+        self.get_handle()
             .dismiss()
             .await
             .into_glib_error::<GError>()?;

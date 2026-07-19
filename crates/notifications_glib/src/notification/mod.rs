@@ -16,7 +16,10 @@ impl GDesktopNotification {
             obj.imp().actions.append(&GAction::new_from_rust(i));
         }
 
-        obj.imp().notification.replace(notification);
+        obj.imp()
+            .notification
+            .set(notification)
+            .expect("Failed to set NotificationHandle");
 
         obj
     }

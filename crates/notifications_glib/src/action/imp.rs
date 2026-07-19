@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::sync::OnceLock;
 
 use glib::prelude::*;
@@ -12,7 +11,7 @@ use crate::error::GError;
 
 #[derive(Default)]
 pub struct GActionImp {
-    pub action: RefCell<ActionHandle>,
+    pub action: OnceLock<ActionHandle>,
 }
 
 #[glib::object_subclass]
@@ -48,24 +47,26 @@ impl ObjectImpl for GActionImp {
     }
 }
 impl GActionImp {
+    fn get_handle(&self) -> ActionHandle {
+        self.action
+            .get()
+            .expect("Inner ActionHandle is empty. This object is initialized incorrectly!")
+            .clone()
+    }
     pub fn get_notification_id(&self) -> u32 {
-        self.action.borrow().notification_id()
+        self.get_handle().notification_id()
     }
 
     pub fn get_label(&self) -> String {
-        self.action.borrow().label().clone()
+        self.get_handle().label().clone()
     }
 
     pub fn get_action_key(&self) -> String {
-        self.action.borrow().action_key().clone()
+        self.get_handle().action_key().clone()
     }
 
     pub async fn invoke(&self) -> Result<(), glib::Error> {
-        self.action
-            .borrow()
-            .invoke()
-            .await
-            .into_glib_error::<GError>()
+        self.get_handle().invoke().await.into_glib_error::<GError>()
     }
 }
 pub(crate) mod ffi {
