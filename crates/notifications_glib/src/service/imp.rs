@@ -71,6 +71,8 @@ impl ObjectImpl for GNotificationServiceImp {
                 glib::ParamSpecObject::builder::<gio::ListStore>("notifications")
                     .read_only()
                     .build(),
+                glib::ParamSpecBoolean::builder("follow-xdg-timeout").build(),
+                glib::ParamSpecUInt::builder("default-timeout").build(),
             ]
         })
     }
@@ -78,6 +80,28 @@ impl ObjectImpl for GNotificationServiceImp {
     fn property(&self, _id: usize, _pspec: &glib::ParamSpec) -> glib::Value {
         match _pspec.name() {
             "notifications" => self.notifications.to_value(),
+            "follow-xdg-timeout" => self.service.settings().follow_xdg_timeout().to_value(),
+            "default-timeout" => self.service.settings().default_timeout().to_value(),
+            _ => unimplemented!(),
+        }
+    }
+
+    fn set_property(&self, _id: usize, _value: &glib::Value, _pspec: &glib::ParamSpec) {
+        match _pspec.name() {
+            "follow-xdg-timeout" => {
+                let value: bool = _value
+                    .get_owned()
+                    .expect("got wrong type for 'follow-xdg-timeout' property");
+                self.service.settings().set_follow_xdg_timeout(value);
+            }
+            "default-timeout" => {
+                let value: u32 = _value
+                    .get_owned()
+                    .expect("got wrong type for 'default-timeout' property");
+
+                self.service.settings().set_default_timeout(value);
+            }
+
             _ => unimplemented!(),
         }
     }

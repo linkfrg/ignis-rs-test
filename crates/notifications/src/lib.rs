@@ -42,6 +42,7 @@ mod file_utils;
 mod notification;
 mod private_prelude;
 mod service;
+mod settings;
 mod urgency;
 
 pub use action::ActionHandle;
@@ -50,4 +51,5 @@ pub use error::{Error, Result};
 pub use event::Event;
 pub use notification::NotificationHandle;
 pub use service::NotificationService;
+pub use settings::Settings;
 pub use urgency::Urgency;

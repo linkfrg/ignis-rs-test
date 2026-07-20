@@ -228,3 +228,11 @@ def test_action():
     assert hasattr(IgnisNotificationsGLib.Action, "get_action_key")
     assert hasattr(IgnisNotificationsGLib.Action, "invoke_async")
     assert hasattr(IgnisNotificationsGLib.Action, "invoke_finish")
+
+
+def test_settings(notification_service):
+    notification_service.props.follow_xdg_timeout = False
+    notification_service.props.default_timeout = 2000
+
+    assert notification_service.props.follow_xdg_timeout is False
+    assert notification_service.props.default_timeout == 2000

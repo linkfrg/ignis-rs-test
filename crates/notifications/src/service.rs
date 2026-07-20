@@ -13,6 +13,7 @@ pub(crate) struct NotificationServiceInner {
     pub(crate) connection: OnceLock<Option<Connection>>,
     pub(crate) tx: broadcast::Sender<Event>,
     pub(crate) cache_dir: Option<PathBuf>,
+    pub(crate) settings: Settings,
 }
 
 /// A notification daemon that follows XDG Desktop Notifications Specification.
@@ -39,6 +40,7 @@ impl NotificationService {
                 connection: OnceLock::new(),
                 tx,
                 cache_dir,
+                settings: Settings::default(),
             }),
         })
     }
@@ -55,6 +57,7 @@ impl NotificationService {
                 connection: OnceLock::new(),
                 tx,
                 cache_dir: None,
+                settings: Settings::default(),
             }),
         }
     }
@@ -62,6 +65,11 @@ impl NotificationService {
     /// Returns an instance of event receiver.
     pub fn subscribe(&self) -> broadcast::Receiver<Event> {
         self.inner.tx.subscribe()
+    }
+
+    /// Returns an instance of settings that affect behavior of the service.
+    pub fn settings(&self) -> Settings {
+        self.inner.settings.clone()
     }
 
     /// Runs the service.
@@ -103,7 +111,7 @@ impl NotificationService {
             .ok_or(Error::NoConnection)?)
     }
 
-    async fn get_dbus_interface(&self) -> Result<InterfaceRef<DBusService>> {
+    pub(crate) async fn get_dbus_interface(&self) -> Result<InterfaceRef<DBusService>> {
         Ok(self
             .get_connection()?
             .object_server()
@@ -201,13 +209,15 @@ mod tests {
     use super::*;
     use std::{collections::HashMap, time::Duration};
 
+    use crate::CloseReason;
     use crate::Urgency;
 
     use fake::Fake;
     use fake::faker::lorem::en::Sentence;
-    use image::{ImageBuffer, Rgba};
-    use notify_rust::{CloseReason, Notification, NotificationHandle, NotificationResponse};
-    use notify_rust::{Image, Urgency as ClientUrgency};
+    use notify_rust::Urgency as ClientUrgency;
+    use notify_rust::{
+        CloseReason as ClientCloseReason, Notification, NotificationHandle, NotificationResponse,
+    };
     use rand::seq::IndexedRandom;
     use tempfile::TempDir;
     use tokio::sync::oneshot;
@@ -348,7 +358,7 @@ mod tests {
         ctx.service.dismiss_notification(id).await.unwrap();
 
         let close_reason = rx.await.unwrap();
-        assert_eq!(close_reason, CloseReason::Dismissed);
+        assert_eq!(close_reason, ClientCloseReason::Dismissed);
     }
 
     #[tokio::test]
@@ -406,34 +416,75 @@ mod tests {
         assert_eq!(ctx.service.get_notifications().len(), 0);
     }
 
-    #[tokio::test]
-    async fn test_image_data() {
+    // FIXME: Bug in notify-rust causes panic when using image_data()
+    // because it uses get_server_information() that thereby uses zbus::block_on()
+    // Starting a runtime from within another runtime is prohibited.
+    // Happens only when "tokio" feature of zbus is enabled.
+    // TODO: report the issue in notify-rust repo
+    //
+    // #[tokio::test]
+    // async fn test_image_data() {
+    //     let ctx = setup().await;
+    //
+    //     let width = 64;
+    //     let height = 64;
+    //
+    //     let img_buffer =
+    //         ImageBuffer::<Rgba<u8>, _>::from_pixel(width, height, Rgba([255, 255, 255, 255]));
+    //
+    //     let img = Image::from_rgba(width as i32, height as i32, img_buffer.into_raw()).unwrap();
+    //
+    //     let client_handle = create_random_notification()
+    //         .image_data(img)
+    //         .show_async()
+    //         .await
+    //         .unwrap();
+    //
+    //     let handle = ctx
+    //         .service
+    //         .get_notification_by_id(client_handle.id())
+    //         .unwrap();
+    //
+    //     let path = PathBuf::from(handle.icon().unwrap());
+    //
+    //     assert!(path.exists());
+    // }
+
+    async fn check_timeout(ms: i32) {
         let ctx = setup().await;
 
-        let width = 64;
-        let height = 64;
-
-        let img_buffer =
-            ImageBuffer::<Rgba<u8>, _>::from_pixel(width, height, Rgba([255, 255, 255, 255]));
-
-        let img = Image::from_rgba(width as i32, height as i32, img_buffer.into_raw()).unwrap();
-
-        let client_handle = create_random_notification()
-            .image_data(img)
+        create_random_notification()
+            .timeout(ms)
             .show_async()
             .await
             .unwrap();
 
-        let handle = ctx
-            .service
-            .get_notification_by_id(client_handle.id())
-            .unwrap();
+        let (tx, rx) = oneshot::channel();
 
-        let path = PathBuf::from(handle.icon().unwrap());
+        let mut sub = ctx.service.subscribe();
+        tokio::spawn(async move {
+            while let Some(e) = sub.recv().await.ok() {
+                match e {
+                    Event::NotificationClosed { id: _, reason } => {
+                        tx.send(reason).unwrap();
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+        });
 
-        assert!(path.exists());
+        let reason = rx.await.unwrap();
+        assert_eq!(reason, CloseReason::Expired);
     }
 
     #[tokio::test]
-    async fn test_timeout() {}
+    async fn test_default_timeout() {
+        check_timeout(-1).await;
+    }
+
+    #[tokio::test]
+    async fn test_requested_timeout() {
+        check_timeout(1000).await;
+    }
 }

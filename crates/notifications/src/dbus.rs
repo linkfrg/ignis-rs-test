@@ -1,6 +1,7 @@
 use crate::private_prelude::*;
 use gdk_pixbuf::{Colorspace, Pixbuf};
 use std::collections::HashMap;
+use tokio::time::{Duration, sleep};
 use tracing::error;
 use zbus::fdo;
 use zbus::object_server::SignalEmitter;
@@ -80,6 +81,38 @@ impl DBusService {
             notification: handle,
             replace,
         });
+
+        if self.service.inner.settings.follow_xdg_timeout() {
+            let actual_timeout = match timeout {
+                -1 => self.service.inner.settings.default_timeout(),
+                _ => timeout.try_into().unwrap_or(0), // do not do anything if timeout is negative
+                                                      // and not -1
+            };
+
+            let service = self.service.clone();
+
+            // not equals 0 means should expire
+            if actual_timeout != 0 {
+                tokio::spawn(async move {
+                    sleep(Duration::from_millis(actual_timeout as u64)).await;
+
+                    // Notification can be closed by user before timeout ends
+                    // Do not try to expire it if it is already removed
+                    if let Ok(_) = service.inner.data.remove_notification(id) {
+                        let reason = CloseReason::Expired;
+
+                        if let Ok(interface) = service.get_dbus_interface().await {
+                            let _ = interface.notification_closed(id, reason.into()).await;
+                        }
+
+                        let _ = service
+                            .inner
+                            .tx
+                            .send(Event::NotificationClosed { id, reason: reason });
+                    };
+                });
+            }
+        }
 
         id
     }

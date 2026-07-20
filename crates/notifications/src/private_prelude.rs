@@ -1,6 +1,6 @@
 pub(crate) use crate::{
     ActionHandle, CloseReason, Error, Event, NotificationHandle, NotificationService, Result,
-    Urgency,
+    Settings, Urgency,
 };
 
 pub(crate) use crate::action::Action;

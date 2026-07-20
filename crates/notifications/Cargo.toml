@@ -13,12 +13,12 @@ tracing.workspace = true
 serde = { version = "1.0.228", features = ["rc"] }
 serde_json = "1.0.149"
 thiserror = "2.0.17"
-zbus = "5.12.0"
+zbus = { version = "5.12.0", default-features = false, features = ["tokio"] }
 zvariant = { version = "5.8.0", features = ["arrayvec"] }
 
 [dev-dependencies]
 fake = "5.1.0"
 rand = "0.10.2"
-notify-rust = { version = "4", features = ["images_no_default_features"] } 
+notify-rust = { version = "4", default-features = false, features = ["images_no_default_features", "z-with-tokio"] } 
 tempfile = "3.27.0"
 image = "0.25.10"
