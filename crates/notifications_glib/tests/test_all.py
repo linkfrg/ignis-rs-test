@@ -187,6 +187,27 @@ def test_dismiss_notification(run_in_glib, notification_service):
     assert closed_emitted
 
 
+def test_dismiss_notification_2(run_in_glib, notification_service):
+    closed_emitted: bool = False
+
+    def on_closed(x, reason):
+        nonlocal closed_emitted
+
+        assert reason == IgnisNotificationsGLib.CloseReason.DISMISSED
+        closed_emitted = True
+
+    async def test():
+        await send_random_notification()
+
+        latest = notification_service.get_notifications()[-1]
+        latest.connect("closed", on_closed)
+        await latest.dismiss_async()
+
+    run_in_glib(test())
+
+    assert closed_emitted
+
+
 def test_sorted(notification_service):
     notifications = notification_service.get_notifications()
     is_sorted = notifications == sorted(notifications, key=lambda x: x.get_id())

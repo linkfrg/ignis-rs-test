@@ -173,8 +173,16 @@ impl GNotificationServiceImp {
             });
 
         if let Some(position) = position {
+            let gnotification = notif_store
+                .item(position)
+                .unwrap()
+                .downcast_ref::<GDesktopNotification>()
+                .unwrap()
+                .to_owned();
+
             notif_store.remove(position);
 
+            gnotification.emit_by_name_with_values("closed", &[reason.to_value()]);
             self.obj().notify("notifications");
             self.obj()
                 .emit_by_name_with_values("closed", &[id.to_value(), reason.to_value()]);

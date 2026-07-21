@@ -2,11 +2,12 @@ use std::sync::OnceLock;
 
 use gio::prelude::ListModelExt;
 use glib::prelude::*;
-use glib::subclass::prelude::*;
+use glib::subclass::{Signal, prelude::*};
 use glib_utils::{IntoGLibError, glib_async_method, runtime};
 use notifications::NotificationHandle;
 
 use crate::action::GAction;
+use crate::close_reason::GCloseReason;
 use crate::error::GError;
 use crate::urgency::GUrgency;
 
@@ -32,6 +33,17 @@ impl ObjectSubclass for GDesktopNotificationImp {
 }
 
 impl ObjectImpl for GDesktopNotificationImp {
+    fn signals() -> &'static [glib::subclass::Signal] {
+        static SIGNALS: OnceLock<Vec<Signal>> = OnceLock::new();
+        SIGNALS.get_or_init(|| {
+            vec![
+                Signal::builder("closed")
+                    .param_types([GCloseReason::static_type()])
+                    .build(),
+            ]
+        })
+    }
+
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: OnceLock<Vec<glib::ParamSpec>> = OnceLock::new();
         PROPERTIES.get_or_init(|| {
