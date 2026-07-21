@@ -114,13 +114,14 @@ def test_signals(run_in_glib, notification_service):
     received_signal_notified: bool = False
     received_notify_notifications: bool = False
 
-    def on_notify_notification(x, _):
+    def on_notify_notification(_, __):
         nonlocal received_notify_notifications
         received_notify_notifications = True
 
-    def on_new_notification(x, id_, replace):
+    def on_new_notification(x, id_, notification, replace):
         nonlocal received_signal_notified
         received_signal_notified = True
+        assert isinstance(notification, IgnisNotificationsGLib.Notification)
 
     async def test():
         notification_service.connect("notified", on_new_notification)

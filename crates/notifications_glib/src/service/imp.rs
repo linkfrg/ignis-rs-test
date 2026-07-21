@@ -54,7 +54,11 @@ impl ObjectImpl for GNotificationServiceImp {
         SIGNALS.get_or_init(|| {
             vec![
                 Signal::builder("notified")
-                    .param_types([u32::static_type(), bool::static_type()])
+                    .param_types([
+                        u32::static_type(),
+                        GDesktopNotification::static_type(),
+                        bool::static_type(),
+                    ])
                     .build(),
                 Signal::builder("closed")
                     .param_types([u32::static_type(), GCloseReason::static_type()])
@@ -137,7 +141,7 @@ impl ObjectImpl for GNotificationServiceImp {
                                 );
 
                             if let Some(pos) = position {
-                                notif_store.splice(pos, 1, &[g_desktop_notification]);
+                                notif_store.splice(pos, 1, &[g_desktop_notification.clone()]);
                             } else {
                                 notif_store.append(&g_desktop_notification);
                             }
@@ -146,7 +150,11 @@ impl ObjectImpl for GNotificationServiceImp {
                         obj.notify("notifications");
                         obj.emit_by_name_with_values(
                             "notified",
-                            &[id.to_value(), replace.to_value()],
+                            &[
+                                id.to_value(),
+                                g_desktop_notification.to_value(),
+                                replace.to_value(),
+                            ],
                         );
                     }
                 }
