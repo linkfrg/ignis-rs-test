@@ -28,22 +28,22 @@ pub(crate) mod ffi {
 
     pub type IgnisNotificationsGLibError = i32;
 
-    pub const IGNIS_NOTIFICATIONS_GLIB_DBUS_ERROR: IgnisNotificationsGLibError =
+    pub const IGNIS_NOTIFICATIONS_GLIB_ERROR_DBUS_ERROR: IgnisNotificationsGLibError =
         super::GError::DBusError as i32;
 
-    pub const IGNIS_NOTIFICATIONS_GLIB_NO_CONNECTION: IgnisNotificationsGLibError =
+    pub const IGNIS_NOTIFICATIONS_GLIB_ERROR_NO_CONNECTION: IgnisNotificationsGLibError =
         super::GError::NoConnection as i32;
 
-    pub const IGNIS_NOTIFICATIONS_GLIB_IO_ERROR: IgnisNotificationsGLibError =
+    pub const IGNIS_NOTIFICATIONS_GLIB_ERROR_IO_ERROR: IgnisNotificationsGLibError =
         super::GError::IOError as i32;
 
-    pub const IGNIS_NOTIFICATIONS_GLIB_JSON_ERROR: IgnisNotificationsGLibError =
+    pub const IGNIS_NOTIFICATIONS_GLIB_ERROR_JSON_ERROR: IgnisNotificationsGLibError =
         super::GError::JSONError as i32;
 
-    pub const IGNIS_NOTIFICATIONS_GLIB_NOTIFICATION_NOT_FOUND: IgnisNotificationsGLibError =
+    pub const IGNIS_NOTIFICATIONS_GLIB_ERROR_NOTIFICATION_NOT_FOUND: IgnisNotificationsGLibError =
         super::GError::NotificationNotFound as i32;
 
-    pub const IGNIS_NOTIFICATIONS_GLIB_NOTIFICATION_CONNECTION_INITIALIZED_TWICE:
+    pub const IGNIS_NOTIFICATIONS_GLIB_ERROR_CONNECTION_INITIALIZED_TWICE:
         IgnisNotificationsGLibError = super::GError::ConnectionInitializedTwice as i32;
 
     #[unsafe(no_mangle)]

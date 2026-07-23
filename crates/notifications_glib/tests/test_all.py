@@ -258,3 +258,12 @@ def test_settings(notification_service):
 
     assert notification_service.props.follow_xdg_timeout is False
     assert notification_service.props.default_timeout == 2000
+
+
+def test_error():
+    assert hasattr(IgnisNotificationsGLib.Error, "DBUS_ERROR")
+    assert hasattr(IgnisNotificationsGLib.Error, "NO_CONNECTION")
+    assert hasattr(IgnisNotificationsGLib.Error, "IO_ERROR")
+    assert hasattr(IgnisNotificationsGLib.Error, "JSON_ERROR")
+    assert hasattr(IgnisNotificationsGLib.Error, "NOTIFICATION_NOT_FOUND")
+    assert hasattr(IgnisNotificationsGLib.Error, "CONNECTION_INITIALIZED_TWICE")
