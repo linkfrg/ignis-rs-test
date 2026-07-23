@@ -134,9 +134,7 @@ impl DBusService {
             .notification_closed(id, CloseReason::DBusCall.into())
             .await?;
 
-        if let Err(e) = self.service.inner.data.remove_notification(id) {
-            error!("Can not remove notification: {e}");
-        }
+        let _ = self.service.inner.data.remove_notification(id);
 
         let _ = self.service.inner.tx.send(Event::NotificationClosed {
             id,
