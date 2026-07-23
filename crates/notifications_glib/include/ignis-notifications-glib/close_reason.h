@@ -5,6 +5,17 @@
 
 G_BEGIN_DECLS
 
+/**
+ * IgnisNotificationsGLibCloseReason:
+ * @IGNIS_NOTIFICATIONS_GLIB_CLOSE_REASON_EXPIRED: Expired timeout. The notification was closed automatically upon expiration of the timeout.
+ * @IGNIS_NOTIFICATIONS_GLIB_CLOSE_REASON_DISMISSED: Dismissed by the user.
+ * @IGNIS_NOTIFICATIONS_GLIB_CLOSE_REASON_D_BUS_CALL: The application requested to close the notification.
+ * @IGNIS_NOTIFICATIONS_GLIB_CLOSE_REASON_OTHER: Undefined/reserved reasons.
+ *
+ * A reason why the notification is closed.
+ *
+ * Since: 0.1
+ */
 typedef enum IgnisNotificationsGLibCloseReason
 {
   IGNIS_NOTIFICATIONS_GLIB_CLOSE_REASON_EXPIRED,
