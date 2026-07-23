@@ -4,7 +4,7 @@
 [library]
 description = "The GLib/GObject bindings for Ignis Notifications"
 authors = "linkfrg"
-license = "MIT or Apache-2.0"
+license = "MIT"
 browse_url = "https://github.com/ignis-sh/ignis"
 repository_url = "https://github.com/ignis-sh/ignis.git"
 website_url = "https://ignis-sh.github.io/ignis"
